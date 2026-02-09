@@ -1,6 +1,6 @@
 ﻿using JiraLite.Application.DTOs;
-using JiraLite.Application.Interfaces;
 using JiraLite.Application.Exceptions;
+using JiraLite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -9,7 +9,7 @@ namespace JiraLite.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // JWT required
+    [Authorize]
     public class TasksController : ControllerBase
     {
         private readonly ITaskService _taskService;
@@ -19,7 +19,7 @@ namespace JiraLite.Api.Controllers
             _taskService = taskService;
         }
 
-        // 🔹 Create a task (only project members)
+        // 🔹 Create task (only project members)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] TaskItemDto dto)
         {
@@ -35,7 +35,7 @@ namespace JiraLite.Api.Controllers
             }
         }
 
-        // 🔹 Get task by ID (any project member can view)
+        // 🔹 Get task by ID
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
@@ -55,7 +55,7 @@ namespace JiraLite.Api.Controllers
             }
         }
 
-        // 🔹 Get tasks by project (only project members)
+        // 🔹 Get tasks by project
         [HttpGet("project/{projectId}")]
         public async Task<IActionResult> GetByProject(Guid projectId)
         {
@@ -71,7 +71,7 @@ namespace JiraLite.Api.Controllers
             }
         }
 
-        // 🔹 Update task (only assignee or project owner)
+        // 🔹 Update task
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] TaskItemDto dto)
         {
@@ -87,7 +87,7 @@ namespace JiraLite.Api.Controllers
             }
         }
 
-        // 🔹 Delete task (only assignee or project owner)
+        // 🔹 Delete task
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
@@ -103,10 +103,23 @@ namespace JiraLite.Api.Controllers
             }
         }
 
-        // 🔹 Helper to extract current user ID from JWT
+        // 🔹 SAFE helper: extract Guid user id
         private Guid GetCurrentUserId()
         {
-            return Guid.Parse(User.FindFirstValue("id")!);
+            // Always prefer our explicit "id" claim
+            var idClaim = User.FindFirstValue("id");
+
+            // Fallback only if needed
+            if (string.IsNullOrWhiteSpace(idClaim))
+                idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrWhiteSpace(idClaim))
+                throw new UnauthorizedAccessException("User ID claim missing");
+
+            if (!Guid.TryParse(idClaim, out var userId))
+                throw new UnauthorizedAccessException($"Invalid user ID claim: '{idClaim}'");
+
+            return userId;
         }
     }
 }

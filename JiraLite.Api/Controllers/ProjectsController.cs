@@ -24,21 +24,17 @@ namespace JiraLite.Api.Controllers
         {
             var currentUserId = GetUserId();
 
+            if (!await _projectService.IsOwnerAsync(projectId, currentUserId))
+                return Forbid();
+
             try
             {
-                // Let the service handle ownership check
                 var memberDto = await _projectService.AddMemberAsync(projectId, dto, currentUserId);
-                return Ok(memberDto); // Return DTO to avoid JSON cycle
+                return Ok(memberDto);
             }
-            catch (UnauthorizedAccessException ex)
+            catch (JiraLite.Application.Exceptions.ConflictException ex)
             {
-                // Return 403 with JSON message
-                return StatusCode(403, new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                // Return 400 with JSON message for other errors
-                return BadRequest(new { message = ex.Message });
+                return Conflict(new { message = ex.Message });
             }
         }
 
@@ -61,7 +57,9 @@ namespace JiraLite.Api.Controllers
         // Helper to extract current user ID from JWT
         private Guid GetUserId()
         {
-            return Guid.Parse(User.FindFirstValue("id")!);
+            return Guid.Parse(
+                User.FindFirstValue(ClaimTypes.NameIdentifier)!
+            );
         }
     }
 }

@@ -3,11 +3,15 @@ using JiraLite.Application.Interfaces;
 using JiraLite.Infrastructure.Persistence;
 using JiraLite.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using NSwag; // NSwag namespace for Swagger UI
+using NSwag;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
+
+// ✅ VERY IMPORTANT: stop ASP.NET from remapping JWT claims (sub → NameIdentifier)
+JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,14 +21,12 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<HttpResponseExceptionFilter>();
 });
 
-
 // 🔹 NSwag / Swagger UI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument(config =>
 {
     config.Title = "JiraLite API";
 
-    // JWT Authentication in Swagger UI
     config.AddSecurity("JWT", Enumerable.Empty<string>(), new OpenApiSecurityScheme
     {
         Type = OpenApiSecuritySchemeType.ApiKey,
@@ -35,8 +37,16 @@ builder.Services.AddOpenApiDocument(config =>
 });
 
 // 🔹 Database
-builder.Services.AddDbContext<JiraLiteDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddDbContext<JiraLiteDbContext>(options =>
+        options.UseInMemoryDatabase("JiraLite_TestDb"));
+}
+else
+{
+    builder.Services.AddDbContext<JiraLiteDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+}
 
 // 🔹 Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -45,6 +55,7 @@ builder.Services.AddScoped<ITaskService, TaskService>();
 
 // 🔹 JWT Authentication
 var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -52,15 +63,24 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.MapInboundClaims = false; // ✅ critical fix
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
+
         ValidateAudience = true,
         ValidAudience = builder.Configuration["Jwt:Audience"],
+
         ValidateLifetime = true,
+
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuerSigningKey = true
+        ValidateIssuerSigningKey = true,
+
+        // ✅ Explicit claim mapping
+        NameClaimType = "id",
+        RoleClaimType = ClaimTypes.Role
     };
 });
 
@@ -71,8 +91,8 @@ var app = builder.Build();
 // 🔹 Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseOpenApi();    // serve OpenAPI JSON
-    app.UseSwaggerUi(); // serve Swagger UI
+    app.UseOpenApi();
+    app.UseSwaggerUi();
 }
 
 app.UseHttpsRedirection();

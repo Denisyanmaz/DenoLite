@@ -3,4 +3,5 @@
   <Project Path="JiraLite.Application/JiraLite.Application.csproj" />
   <Project Path="JiraLite.Domain/JiraLite.Domain.csproj" />
   <Project Path="JiraLite.Infrastructure/JiraLite.Infrastructure.csproj" />
+  <Project Path="JiraLite.Tests/JiraLite.Tests.csproj" />
 </Solution>

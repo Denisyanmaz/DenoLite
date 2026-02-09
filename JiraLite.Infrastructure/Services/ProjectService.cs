@@ -3,6 +3,7 @@ using JiraLite.Application.Interfaces;
 using JiraLite.Domain.Entities;
 using JiraLite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using JiraLite.Application.Exceptions;
 
 namespace JiraLite.Infrastructure.Services
 {
@@ -103,7 +104,7 @@ namespace JiraLite.Infrastructure.Services
                 .AnyAsync(pm => pm.ProjectId == projectId && pm.UserId == dto.UserId);
 
             if (exists)
-                throw new Exception("User is already a member of this project.");
+                throw new ConflictException("User is already a member of this project.");
 
             // 3️⃣ Add new member
             var member = new ProjectMember
