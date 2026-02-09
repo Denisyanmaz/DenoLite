@@ -3,6 +3,7 @@ using JiraLite.Application.Interfaces;
 using JiraLite.Infrastructure.Persistence;
 using JiraLite.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NSwag;
@@ -16,10 +17,20 @@ JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 var builder = WebApplication.CreateBuilder(args);
 
 // 🔹 Add services to the container
-builder.Services.AddControllers(options =>
-{
-    options.Filters.Add<HttpResponseExceptionFilter>();
-});
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var problem = new ValidationProblemDetails(context.ModelState)
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation failed"
+            };
+            return new BadRequestObjectResult(problem);
+        };
+    });
+
 
 // 🔹 NSwag / Swagger UI
 builder.Services.AddEndpointsApiExplorer();
@@ -77,7 +88,7 @@ builder.Services.AddAuthentication(options =>
         RoleClaimType = ClaimTypes.Role
     };
 });
-
+builder.Services.AddTransient<JiraLite.Api.Middleware.ExceptionHandlingMiddleware>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -88,6 +99,7 @@ if (app.Environment.IsDevelopment())
     app.UseOpenApi();
     app.UseSwaggerUi();
 }
+app.UseMiddleware<JiraLite.Api.Middleware.ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 

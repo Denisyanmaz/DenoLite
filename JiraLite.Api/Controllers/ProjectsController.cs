@@ -8,7 +8,7 @@ namespace JiraLite.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // 🔐 JWT required
+    [Authorize]
     public class ProjectsController : ControllerBase
     {
         private readonly IProjectService _projectService;
@@ -18,35 +18,25 @@ namespace JiraLite.Api.Controllers
             _projectService = projectService;
         }
 
-        // 🔹 Add a member to project (Owner only)
         [HttpPost("{projectId}/members")]
         public async Task<IActionResult> AddMember(Guid projectId, [FromBody] ProjectMemberDto dto)
         {
-            var currentUserId = GetUserId();
+            var member = await _projectService.AddMemberAsync(
+                projectId,
+                dto,
+                GetUserId()
+            );
 
-            if (!await _projectService.IsOwnerAsync(projectId, currentUserId))
-                return Forbid();
-
-            try
-            {
-                var memberDto = await _projectService.AddMemberAsync(projectId, dto, currentUserId);
-                return Ok(memberDto);
-            }
-            catch (JiraLite.Application.Exceptions.ConflictException ex)
-            {
-                return Conflict(new { message = ex.Message });
-            }
+            return Ok(member);
         }
 
-        // 🔹 Create a project
         [HttpPost]
-        public async Task<IActionResult> Create(CreateProjectDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateProjectDto dto)
         {
-            var result = await _projectService.CreateAsync(GetUserId(), dto);
-            return Ok(result);
+            var project = await _projectService.CreateAsync(GetUserId(), dto);
+            return Ok(project);
         }
 
-        // 🔹 Get projects for current user
         [HttpGet]
         public async Task<IActionResult> MyProjects()
         {
@@ -54,7 +44,6 @@ namespace JiraLite.Api.Controllers
             return Ok(projects);
         }
 
-        // Helper to extract current user ID from JWT
         private Guid GetUserId()
         {
             return Guid.Parse(

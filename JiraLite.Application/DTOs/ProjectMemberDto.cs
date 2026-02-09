@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace JiraLite.Application.DTOs
 {
     public class ProjectMemberDto
     {
-        public Guid UserId { get; set; }       // ID of the user to invite
-        public string Role { get; set; } = "Member";  // "Owner" or "Member"
-    }
+        [Required]
+        public Guid UserId { get; set; }   // invite user id
 
+        [Required]
+        [RegularExpression("^(Owner|Member)$", ErrorMessage = "Role must be 'Owner' or 'Member'.")]
+        public string Role { get; set; } = "Member";
+    }
 }

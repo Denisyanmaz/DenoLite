@@ -8,20 +8,28 @@ namespace JiraLite.Api.Filters
     {
         public void OnException(ExceptionContext context)
         {
-            if (context.Exception is ForbiddenException forbiddenEx)
+            switch (context.Exception)
             {
-                context.Result = new ObjectResult(new { message = forbiddenEx.Message })
-                {
-                    StatusCode = 403
-                };
-                context.ExceptionHandled = true;
-            }
+                case ForbiddenException ex:
+                    context.Result = new ObjectResult(new { message = ex.Message })
+                    {
+                        StatusCode = StatusCodes.Status403Forbidden
+                    };
+                    context.ExceptionHandled = true;
+                    break;
 
-            // Optional: map other exceptions here
-            if (context.Exception is KeyNotFoundException notFoundEx)
-            {
-                context.Result = new NotFoundObjectResult(new { message = notFoundEx.Message });
-                context.ExceptionHandled = true;
+                case ConflictException ex:
+                    context.Result = new ObjectResult(new { message = ex.Message })
+                    {
+                        StatusCode = StatusCodes.Status409Conflict
+                    };
+                    context.ExceptionHandled = true;
+                    break;
+
+                case KeyNotFoundException ex:
+                    context.Result = new NotFoundObjectResult(new { message = ex.Message });
+                    context.ExceptionHandled = true;
+                    break;
             }
         }
     }

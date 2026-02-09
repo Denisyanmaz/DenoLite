@@ -1,5 +1,4 @@
 ﻿using JiraLite.Application.DTOs;
-using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,105 +18,49 @@ namespace JiraLite.Api.Controllers
             _taskService = taskService;
         }
 
-        // 🔹 Create task (only project members)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] TaskItemDto dto)
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var task = await _taskService.CreateTaskAsync(dto, userId);
-                return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);
-            }
-            catch (ForbiddenException ex)
-            {
-                return StatusCode(403, new { error = ex.Message });
-            }
+            var task = await _taskService.CreateTaskAsync(dto, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);
         }
 
-        // 🔹 Get task by ID
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var task = await _taskService.GetTaskByIdAsync(id, userId);
-
-                if (task == null)
-                    return NotFound();
-
-                return Ok(task);
-            }
-            catch (ForbiddenException ex)
-            {
-                return StatusCode(403, new { error = ex.Message });
-            }
+            var task = await _taskService.GetTaskByIdAsync(id, GetCurrentUserId());
+            return task == null ? NotFound() : Ok(task);
         }
 
-        // 🔹 Get tasks by project
         [HttpGet("project/{projectId}")]
         public async Task<IActionResult> GetByProject(Guid projectId)
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var tasks = await _taskService.GetTasksByProjectAsync(projectId, userId);
-                return Ok(tasks);
-            }
-            catch (ForbiddenException ex)
-            {
-                return StatusCode(403, new { error = ex.Message });
-            }
+            var tasks = await _taskService.GetTasksByProjectAsync(projectId, GetCurrentUserId());
+            return Ok(tasks);
         }
 
-        // 🔹 Update task
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] TaskItemDto dto)
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var task = await _taskService.UpdateTaskAsync(id, dto, userId);
-                return Ok(task);
-            }
-            catch (ForbiddenException ex)
-            {
-                return StatusCode(403, new { error = ex.Message });
-            }
+            var task = await _taskService.UpdateTaskAsync(id, dto, GetCurrentUserId());
+            return Ok(task);
         }
 
-        // 🔹 Delete task
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            try
-            {
-                var userId = GetCurrentUserId();
-                await _taskService.DeleteTaskAsync(id, userId);
-                return NoContent();
-            }
-            catch (ForbiddenException ex)
-            {
-                return StatusCode(403, new { error = ex.Message });
-            }
+            await _taskService.DeleteTaskAsync(id, GetCurrentUserId());
+            return NoContent();
         }
 
-        // 🔹 SAFE helper: extract Guid user id
         private Guid GetCurrentUserId()
         {
-            // Always prefer our explicit "id" claim
-            var idClaim = User.FindFirstValue("id");
-
-            // Fallback only if needed
-            if (string.IsNullOrWhiteSpace(idClaim))
-                idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            if (string.IsNullOrWhiteSpace(idClaim))
-                throw new UnauthorizedAccessException("User ID claim missing");
+            var idClaim =
+                User.FindFirstValue("id")
+                ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (!Guid.TryParse(idClaim, out var userId))
-                throw new UnauthorizedAccessException($"Invalid user ID claim: '{idClaim}'");
+                throw new UnauthorizedAccessException("Invalid user id");
 
             return userId;
         }
