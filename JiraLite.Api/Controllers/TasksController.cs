@@ -1,4 +1,5 @@
 ﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs.Tasks;
 using JiraLite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -51,6 +52,13 @@ namespace JiraLite.Api.Controllers
         {
             await _taskService.DeleteTaskAsync(id, GetCurrentUserId());
             return NoContent();
+        }
+
+        [HttpGet("project/{projectId}/paged")]
+        public async Task<IActionResult> GetByProjectPaged(Guid projectId, [FromQuery] TaskQueryDto query)
+        {
+            var result = await _taskService.GetTasksByProjectPagedAsync(projectId, GetCurrentUserId(), query);
+            return Ok(result);
         }
 
         private Guid GetCurrentUserId()

@@ -21,6 +21,10 @@ namespace JiraLite.Api.Middleware
             {
                 await WriteProblem(context, StatusCodes.Status401Unauthorized, ex.Message);
             }
+            catch (NotFoundException ex)
+            {
+                await WriteProblem(context, StatusCodes.Status404NotFound, ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 await WriteProblem(context, StatusCodes.Status404NotFound, ex.Message);
@@ -56,10 +60,19 @@ namespace JiraLite.Api.Middleware
             {
                 Status = statusCode,
                 Title = ReasonPhrases.GetReasonPhrase(statusCode),
-                Detail = detail
+                Detail = detail,
+                Instance = context.Request.Path
             };
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            problem.Extensions["traceId"] = context.TraceIdentifier;
+
+            var json = JsonSerializer.Serialize(problem, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            await context.Response.WriteAsync(json);
         }
+
     }
 }

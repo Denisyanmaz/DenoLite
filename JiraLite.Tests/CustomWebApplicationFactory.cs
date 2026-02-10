@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
@@ -58,6 +59,16 @@ namespace JiraLite.Tests.Integration
                 // If you have migrations, prefer:
                 db.Database.Migrate();
                 // db.Database.EnsureCreated();
+            });
+
+            builder.ConfigureAppConfiguration((context, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Jwt:Key"] = "ThisIsASuperSecretKeyForJWT1234567890!",
+                    ["Jwt:Issuer"] = "JiraLite.Api",
+                    ["Jwt:Audience"] = "JiraLite.Api",
+                });
             });
         }
     }

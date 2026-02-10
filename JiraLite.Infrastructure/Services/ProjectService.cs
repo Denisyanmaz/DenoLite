@@ -1,9 +1,10 @@
 ﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs.Common;
+using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
 using JiraLite.Domain.Entities;
 using JiraLite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using JiraLite.Application.Exceptions;
 
 namespace JiraLite.Infrastructure.Services
 {
@@ -109,6 +110,29 @@ namespace JiraLite.Infrastructure.Services
                 UserId = member.UserId,
                 Role = member.Role
             };
+        }
+
+        public async Task<PagedResult<ProjectDto>> GetMyProjectsPagedAsync(Guid userId, int page, int pageSize)
+        {
+            var query = _db.ProjectMembers
+                .Where(pm => pm.UserId == userId)
+                .Select(pm => new ProjectDto
+                {
+                    Id = pm.Project.Id,
+                    Name = pm.Project.Name,
+                    Description = pm.Project.Description,
+                    OwnerId = pm.Project.OwnerId
+                });
+
+            var total = await query.CountAsync();
+
+            var items = await query
+                .OrderBy(p => p.Name) // deterministic ordering for paging (important for tests)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<ProjectDto>(items, page, pageSize, total);
         }
     }
 }

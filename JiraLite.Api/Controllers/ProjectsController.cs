@@ -1,4 +1,5 @@
 ﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -40,6 +41,13 @@ namespace JiraLite.Api.Controllers
         {
             var projects = await _projectService.GetMyProjectsAsync(GetCurrentUserId());
             return Ok(projects);
+        }
+
+        [HttpGet("paged")]
+        public async Task<IActionResult> MyProjectsPaged([FromQuery] PagedQueryDto q)
+        {
+            var result = await _projectService.GetMyProjectsPagedAsync(GetCurrentUserId(), q.Page, q.PageSize);
+            return Ok(result);
         }
 
         private Guid GetCurrentUserId()

@@ -1,4 +1,5 @@
 ﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs.Common;
 
 namespace JiraLite.Application.Interfaces
 {
@@ -11,5 +12,6 @@ namespace JiraLite.Application.Interfaces
         Task<ProjectMemberDto> AddMemberAsync(Guid projectId, ProjectMemberDto dto, Guid currentUserId);
         Task<bool> IsOwnerAsync(Guid projectId, Guid userId);
         Task<bool> IsMemberAsync(Guid projectId, Guid userId);
+        Task<PagedResult<ProjectDto>> GetMyProjectsPagedAsync(Guid userId, int page, int pageSize);
     }
 }
