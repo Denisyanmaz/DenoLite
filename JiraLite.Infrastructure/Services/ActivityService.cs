@@ -2,7 +2,6 @@
 using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
-using JiraLite.Domain.Entities;
 using JiraLite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,7 +18,7 @@ namespace JiraLite.Infrastructure.Services
 
         public async Task LogAsync(Guid projectId, Guid? taskId, Guid actorId, string actionType, string message)
         {
-            var item = new ActivityLog
+            var item = new JiraLite.Domain.Entities.ActivityLog
             {
                 ProjectId = projectId,
                 TaskId = taskId,
@@ -37,36 +36,20 @@ namespace JiraLite.Infrastructure.Services
             ActivityFilterQueryDto query,
             Guid currentUserId)
         {
+            // 🔐 Membership check
             var isMember = await _db.ProjectMembers
                 .AnyAsync(pm => pm.ProjectId == projectId && pm.UserId == currentUserId);
 
             if (!isMember)
                 throw new ForbiddenException("You are not a member of this project.");
 
-            IQueryable<ActivityLog> logs = _db.ActivityLogs.Where(a => a.ProjectId == projectId);
+            var q = _db.ActivityLogs.Where(a => a.ProjectId == projectId);
 
-            // ✅ filters
-            if (!string.IsNullOrWhiteSpace(query.ActionType))
-                logs = logs.Where(a => a.ActionType == query.ActionType);
+            q = ApplyFilters(q, query);
 
-            if (query.TaskId.HasValue)
-                logs = logs.Where(a => a.TaskId == query.TaskId.Value);
+            var total = await q.CountAsync();
 
-            if (query.ActorId.HasValue)
-                logs = logs.Where(a => a.ActorId == query.ActorId.Value);
-
-            if (!string.IsNullOrWhiteSpace(query.Q))
-            {
-                var q = query.Q.Trim();
-
-                logs = logs.Where(a =>
-                    EF.Functions.ILike(a.Message, $"%{q}%") ||
-                    EF.Functions.ILike(a.ActionType, $"%{q}%"));
-            }
-
-            var total = await logs.CountAsync();
-
-            var items = await logs
+            var items = await q
                 .OrderByDescending(a => a.CreatedAt)
                 .ThenByDescending(a => a.Id)
                 .Skip((query.Page - 1) * query.PageSize)
@@ -91,39 +74,25 @@ namespace JiraLite.Infrastructure.Services
             ActivityFilterQueryDto query,
             Guid currentUserId)
         {
+            // Task is soft-delete filtered; if deleted -> null -> 404
             var task = await _db.Tasks.FindAsync(taskId);
             if (task == null)
                 throw new NotFoundException("Task not found");
 
+            // 🔐 Membership check
             var isMember = await _db.ProjectMembers
                 .AnyAsync(pm => pm.ProjectId == task.ProjectId && pm.UserId == currentUserId);
 
             if (!isMember)
                 throw new ForbiddenException("You are not a member of this project.");
 
-            IQueryable<ActivityLog> logs = _db.ActivityLogs.Where(a => a.TaskId == taskId);
+            var q = _db.ActivityLogs.Where(a => a.TaskId == taskId);
 
-            // ✅ filters
-            if (!string.IsNullOrWhiteSpace(query.ActionType))
-                logs = logs.Where(a => a.ActionType == query.ActionType);
+            q = ApplyFilters(q, query);
 
-            // TaskId filter is redundant here, but harmless; ignore it for clarity
-            if (query.ActorId.HasValue)
-                logs = logs.Where(a => a.ActorId == query.ActorId.Value);
+            var total = await q.CountAsync();
 
-            if (!string.IsNullOrWhiteSpace(query.Q))
-            {
-                var q = query.Q.Trim();
-
-                logs = logs.Where(a =>
-                    EF.Functions.ILike(a.Message, $"%{q}%") ||
-                    EF.Functions.ILike(a.ActionType, $"%{q}%"));
-            }
-
-
-            var total = await logs.CountAsync();
-
-            var items = await logs
+            var items = await q
                 .OrderByDescending(a => a.CreatedAt)
                 .ThenByDescending(a => a.Id)
                 .Skip((query.Page - 1) * query.PageSize)
@@ -141,6 +110,38 @@ namespace JiraLite.Infrastructure.Services
                 .ToListAsync();
 
             return new PagedResult<ActivityLogDto>(items, query.Page, query.PageSize, total);
+        }
+
+        private static IQueryable<JiraLite.Domain.Entities.ActivityLog> ApplyFilters(
+            IQueryable<JiraLite.Domain.Entities.ActivityLog> q,
+            ActivityFilterQueryDto query)
+        {
+            if (!string.IsNullOrWhiteSpace(query.ActionType))
+                q = q.Where(a => a.ActionType == query.ActionType);
+
+            if (query.TaskId.HasValue)
+                q = q.Where(a => a.TaskId == query.TaskId);
+
+            if (query.ActorId.HasValue)
+                q = q.Where(a => a.ActorId == query.ActorId);
+
+            if (!string.IsNullOrWhiteSpace(query.Q))
+            {
+                var text = query.Q.Trim();
+
+                // ✅ PostgreSQL-friendly LIKE (case-insensitive)
+                // If you use Npgsql, this works well:
+                q = q.Where(a =>
+                    EF.Functions.ILike(a.Message, $"%{text}%") ||
+                    EF.Functions.ILike(a.ActionType, $"%{text}%"));
+            }
+
+            // safety defaults
+            if (query.Page < 1) query.Page = 1;
+            if (query.PageSize < 1) query.PageSize = 20;
+            if (query.PageSize > 200) query.PageSize = 200;
+
+            return q;
         }
     }
 }

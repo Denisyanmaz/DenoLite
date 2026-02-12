@@ -1,6 +1,7 @@
 ﻿using JiraLite.Application.DTOs;
 using JiraLite.Application.DTOs.Tasks;
 using JiraLite.Application.Interfaces;
+using JiraLite.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -60,6 +61,14 @@ namespace JiraLite.Api.Controllers
             var result = await _taskService.GetTasksByProjectPagedAsync(projectId, GetCurrentUserId(), query);
             return Ok(result);
         }
+
+        [HttpPatch("{id}/status")]
+        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTaskStatusDto dto)
+        {
+            var task = await _taskService.UpdateTaskStatusAsync(id, dto.Status, GetCurrentUserId());
+            return Ok(task);
+        }
+
 
         private Guid GetCurrentUserId()
         {

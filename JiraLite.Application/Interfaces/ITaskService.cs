@@ -2,6 +2,7 @@
 using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.DTOs.Tasks;
 using JiraLite.Domain.Entities;
+using JiraLite.Domain.Enums;
 
 namespace JiraLite.Application.Interfaces
 {
@@ -13,6 +14,7 @@ namespace JiraLite.Application.Interfaces
         Task<List<TaskItem>> GetTasksByProjectAsync(Guid projectId, Guid currentUserId);
         Task<PagedResult<TaskItem>> GetTasksByProjectPagedAsync(Guid projectId, Guid currentUserId, TaskQueryDto query);
         Task<TaskItem> UpdateTaskAsync(Guid taskId, TaskItemDto dto, Guid currentUserId);
+        Task<TaskItem> UpdateTaskStatusAsync(Guid taskId, JiraTaskStatus status, Guid currentUserId);
         Task DeleteTaskAsync(Guid taskId, Guid currentUserId);
     }
 }

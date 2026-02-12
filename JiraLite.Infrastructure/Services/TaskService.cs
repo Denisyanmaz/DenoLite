@@ -4,6 +4,7 @@ using JiraLite.Application.DTOs.Tasks;
 using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
 using JiraLite.Domain.Entities;
+using JiraLite.Domain.Enums;
 using JiraLite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,8 +38,9 @@ namespace JiraLite.Infrastructure.Services
                 Priority = dto.Priority,
                 AssigneeId = dto.AssigneeId,
                 ProjectId = dto.ProjectId,
-                DueDate = dto.DueDate
+                DueDate = AsUtc(dto.DueDate)
             };
+
 
             _context.Tasks.Add(task);
             await _context.SaveChangesAsync();
@@ -108,7 +110,7 @@ namespace JiraLite.Infrastructure.Services
             task.Status = dto.Status;
             task.Priority = dto.Priority;
             task.AssigneeId = dto.AssigneeId;
-            task.DueDate = dto.DueDate;
+            task.DueDate = AsUtc(dto.DueDate);
 
             await _context.SaveChangesAsync();
 
@@ -219,6 +221,31 @@ namespace JiraLite.Infrastructure.Services
 
             return new PagedResult<TaskItem>(items, query.Page, query.PageSize, total);
         }
+        public async Task<TaskItem> UpdateTaskStatusAsync(Guid taskId, JiraTaskStatus status, Guid currentUserId)
+        {
+            var task = await _context.Tasks.FindAsync(taskId);
+            if (task == null) throw new NotFoundException("Task not found");
+
+            var project = await _context.Projects.FindAsync(task.ProjectId);
+            if (project == null) throw new NotFoundException("Project not found");
+
+            if (task.AssigneeId != currentUserId && project.OwnerId != currentUserId)
+                throw new ForbiddenException("Only the assignee or project owner can update this task.");
+
+            var beforeStatus = task.Status;
+            if (beforeStatus != status)
+            {
+                task.Status = status;
+                await _context.SaveChangesAsync();
+
+                // optional: activity log
+                await _activity.LogAsync(task.ProjectId, task.Id, currentUserId, "TaskStatusChanged",
+                    $"Status changed: {beforeStatus} → {task.Status}.");
+            }
+
+            return task;
+        }
+
 
         private static string FormatPriority(int p) => $"P{p}";
 
@@ -230,6 +257,17 @@ namespace JiraLite.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(text)) return "";
             text = text.Trim();
             return text.Length <= max ? text : text.Substring(0, max) + "…";
+        }
+        private static DateTime? AsUtc(DateTime? dt)
+        {
+            if (!dt.HasValue) return null;
+
+            // if it already has a kind, keep it (but convert Local -> UTC)
+            if (dt.Value.Kind == DateTimeKind.Utc) return dt.Value;
+            if (dt.Value.Kind == DateTimeKind.Local) return dt.Value.ToUniversalTime();
+
+            // Unspecified -> treat as UTC (best for date-only inputs)
+            return DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc);
         }
     }
 }
