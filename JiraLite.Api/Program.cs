@@ -13,10 +13,22 @@ using System.Security.Claims;
 using System.Text;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using dotenv.net;
 
 
 // ✅ VERY IMPORTANT: stop ASP.NET from remapping JWT claims (sub → NameIdentifier)
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+
+var envName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+if (string.Equals(envName, "Production", StringComparison.OrdinalIgnoreCase))
+{
+    DotEnv.Load(new DotEnvOptions(envFilePaths: new[] { ".env.production" }));
+}
+else
+{
+    DotEnv.Load(new DotEnvOptions(envFilePaths: new[] { ".env.development" }));
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
