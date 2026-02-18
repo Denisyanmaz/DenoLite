@@ -1,4 +1,4 @@
-﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs;
 using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
@@ -54,15 +54,22 @@ namespace JiraLite.Infrastructure.Services
                 .ThenByDescending(a => a.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(a => new ActivityLogDto
+                .GroupJoin(
+                    _db.Tasks,
+                    a => a.TaskId,
+                    t => (Guid?)t.Id,
+                    (a, tasks) => new { Activity = a, Task = tasks.FirstOrDefault() }
+                )
+                .Select(x => new ActivityLogDto
                 {
-                    Id = a.Id,
-                    ProjectId = a.ProjectId,
-                    TaskId = a.TaskId,
-                    ActorId = a.ActorId,
-                    ActionType = a.ActionType,
-                    Message = a.Message,
-                    CreatedAt = a.CreatedAt
+                    Id = x.Activity.Id,
+                    ProjectId = x.Activity.ProjectId,
+                    TaskId = x.Activity.TaskId,
+                    TaskTitle = x.Task != null ? x.Task.Title : null,
+                    ActorId = x.Activity.ActorId,
+                    ActionType = x.Activity.ActionType,
+                    Message = x.Activity.Message,
+                    CreatedAt = x.Activity.CreatedAt
                 })
                 .ToListAsync();
 
@@ -97,15 +104,22 @@ namespace JiraLite.Infrastructure.Services
                 .ThenByDescending(a => a.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(a => new ActivityLogDto
+                .GroupJoin(
+                    _db.Tasks,
+                    a => a.TaskId,
+                    t => (Guid?)t.Id,
+                    (a, tasks) => new { Activity = a, Task = tasks.FirstOrDefault() }
+                )
+                .Select(x => new ActivityLogDto
                 {
-                    Id = a.Id,
-                    ProjectId = a.ProjectId,
-                    TaskId = a.TaskId,
-                    ActorId = a.ActorId,
-                    ActionType = a.ActionType,
-                    Message = a.Message,
-                    CreatedAt = a.CreatedAt
+                    Id = x.Activity.Id,
+                    ProjectId = x.Activity.ProjectId,
+                    TaskId = x.Activity.TaskId,
+                    TaskTitle = x.Task != null ? x.Task.Title : null,
+                    ActorId = x.Activity.ActorId,
+                    ActionType = x.Activity.ActionType,
+                    Message = x.Activity.Message,
+                    CreatedAt = x.Activity.CreatedAt
                 })
                 .ToListAsync();
 

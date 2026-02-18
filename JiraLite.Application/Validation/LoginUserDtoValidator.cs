@@ -1,7 +1,7 @@
-﻿using FluentValidation;
+using FluentValidation;
 using JiraLite.Application.DTOs.Auth;
 
-namespace JiraLite.Api.Validation
+namespace JiraLite.Application.Validation
 {
     public class LoginUserDtoValidator : AbstractValidator<LoginUserDto>
     {

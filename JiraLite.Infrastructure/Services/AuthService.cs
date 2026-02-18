@@ -1,4 +1,4 @@
-﻿using BCrypt.Net;
+using BCrypt.Net;
 using JiraLite.Application.DTOs.Auth;
 using JiraLite.Application.Interfaces;
 using JiraLite.Domain.Entities;
@@ -222,6 +222,143 @@ namespace JiraLite.Infrastructure.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public async Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword)
+        {
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                throw new NotFoundException("User not found.");
+
+            // Verify old password
+            if (!BCrypt.Net.BCrypt.Verify(oldPassword, user.PasswordHash))
+                throw new UnauthorizedAccessException("Current password is incorrect.");
+
+            // Validate new password
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+                throw new BadRequestException("New password must be at least 6 characters.");
+
+            if (oldPassword == newPassword)
+                throw new BadRequestException("New password must be different from the current password.");
+
+            // Update password
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task RequestEmailChangeAsync(Guid userId, string password, string newEmail)
+        {
+            newEmail = newEmail.Trim().ToLowerInvariant();
+
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                throw new NotFoundException("User not found.");
+
+            // Verify password
+            if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+                throw new UnauthorizedAccessException("Password is incorrect.");
+
+            // Check if new email is different
+            if (user.Email.ToLower() == newEmail)
+                throw new BadRequestException("New email must be different from current email.");
+
+            // Check if new email already exists
+            if (await _db.Users.AnyAsync(u => u.Email.ToLower() == newEmail))
+                throw new ConflictException("Email already in use.");
+
+            // Create/replace email change verification
+            var existingChange = await _db.EmailChangeRequests
+                .FirstOrDefaultAsync(r => r.UserId == userId);
+
+            if (existingChange != null)
+                _db.EmailChangeRequests.Remove(existingChange);
+
+            var code = GenerateSixDigitCode();
+            var hashedCode = HashOtp(newEmail, code);
+
+            var changeRequest = new JiraLite.Domain.Entities.EmailChangeRequest
+            {
+                UserId = userId,
+                NewEmail = newEmail,
+                CodeHash = hashedCode,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15)
+            };
+
+            _db.EmailChangeRequests.Add(changeRequest);
+            await _db.SaveChangesAsync();
+
+            // Send OTP to new email
+            var otpSubject = "Your Email Change Verification Code";
+            var otpBody = $"""
+                <p>Hi,</p>
+                <p>You requested to change your email address in <strong>JiraLite</strong>.</p>
+                <p>Your verification code is: <strong style="font-size: 24px; color: #007bff;">{code}</strong></p>
+                <p>This code will expire in 15 minutes.</p>
+                <p>If you didn't request this, please ignore this email.</p>
+                <p>— The JiraLite Team</p>
+                """;
+
+            await _emailSender.SendAsync(newEmail, otpSubject, otpBody);
+
+            // Send warning to old email
+            var warningSubject = "Email Change Request Notification";
+            var warningBody = $"""
+                <p>Hi,</p>
+                <p><strong>⚠️ Security Alert</strong></p>
+                <p>A request was made to change your email address in <strong>JiraLite</strong> to: <strong>{newEmail}</strong></p>
+                <p>If this was you, no action is needed. You will need to verify the new email with a code sent to it.</p>
+                <p>If this wasn't you, please secure your account immediately by changing your password.</p>
+                <p>— The JiraLite Team</p>
+                """;
+
+            try
+            {
+                await _emailSender.SendAsync(user.Email, warningSubject, warningBody);
+            }
+            catch
+            {
+                // Don't fail the operation if warning email fails
+            }
+        }
+
+        public async Task VerifyAndChangeEmailAsync(Guid userId, string newEmail, string code)
+        {
+            newEmail = newEmail.Trim().ToLowerInvariant();
+            code = code.Trim();
+
+            if (code.Length != 6 || !code.All(char.IsDigit))
+                throw new BadRequestException("Invalid code format.");
+
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                throw new NotFoundException("User not found.");
+
+            var changeRequest = await _db.EmailChangeRequests
+                .FirstOrDefaultAsync(r => r.UserId == userId && r.NewEmail.ToLower() == newEmail);
+
+            if (changeRequest == null)
+                throw new NotFoundException("Email change request not found.");
+
+            if (changeRequest.ExpiresAt < DateTime.UtcNow)
+            {
+                _db.EmailChangeRequests.Remove(changeRequest);
+                await _db.SaveChangesAsync();
+                throw new BadRequestException("Code has expired. Please request a new one.");
+            }
+
+            var expectedHash = HashOtp(newEmail, code);
+            if (!FixedTimeEquals(changeRequest.CodeHash, expectedHash))
+                throw new UnauthorizedAccessException("Invalid verification code.");
+
+            // Update email
+            user.Email = newEmail;
+            user.IsEmailVerified = true;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            _db.EmailChangeRequests.Remove(changeRequest);
+            await _db.SaveChangesAsync();
         }
 
         private string GenerateSixDigitCode()

@@ -1,4 +1,4 @@
-﻿using JiraLite.Application.DTOs.Auth;
+using JiraLite.Application.DTOs.Auth;
 using JiraLite.Application.Interfaces;
 using JiraLite.Infrastructure.Persistence;   // ✅ YOUR DbContext namespace
 using Microsoft.AspNetCore.Authorization;
@@ -66,6 +66,42 @@ namespace JiraLite.Api.Controllers
                 return NotFound("User not found.");
 
             return Ok(new { userId = user.Id });
+        }
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var userIdClaim = User.FindFirst("id")?.Value;
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized("Invalid user token.");
+
+            await _authService.ChangePasswordAsync(userId, dto.OldPassword, dto.NewPassword);
+            return Ok(new { message = "Password changed successfully." });
+        }
+
+        [Authorize]
+        [HttpPost("request-email-change")]
+        public async Task<IActionResult> RequestEmailChange([FromBody] RequestEmailChangeDto dto)
+        {
+            var userIdClaim = User.FindFirst("id")?.Value;
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized("Invalid user token.");
+
+            await _authService.RequestEmailChangeAsync(userId, dto.Password, dto.NewEmail);
+            return Ok(new { message = "Verification code sent." });
+        }
+
+        [Authorize]
+        [HttpPost("verify-email-change")]
+        public async Task<IActionResult> VerifyEmailChange([FromBody] VerifyEmailChangeDto dto)
+        {
+            var userIdClaim = User.FindFirst("id")?.Value;
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized("Invalid user token.");
+
+            await _authService.VerifyAndChangeEmailAsync(userId, dto.NewEmail, dto.Code);
+            return Ok(new { message = "Email changed successfully." });
         }
     }
 }

@@ -200,6 +200,31 @@ namespace JiraLite.Web.Pages.Tasks
         }
 
         // ============================================================
+        // POST: Delete Task
+        // Called by JS: POST ?handler=DeleteTask
+        // ============================================================
+        public async Task<IActionResult> OnPostDeleteTaskAsync()
+        {
+            if (Id == Guid.Empty)
+                return BadRequest("Invalid task id.");
+
+            var client = _httpClientFactory.CreateClient("JiraLiteApi");
+
+            var resp = await client.DeleteAsync($"/api/tasks/{Id}");
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                return Unauthorized();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                return StatusCode((int)resp.StatusCode, body);
+            }
+
+            return new JsonResult(new { ok = true });
+        }
+
+        // ============================================================
         // Loader
         // ============================================================
         private async Task<IActionResult> LoadAsync(

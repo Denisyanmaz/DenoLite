@@ -1,8 +1,8 @@
-﻿using FluentValidation;
+using FluentValidation;
 using JiraLite.Application.DTOs;
 using JiraLite.Application.DTOs.Auth;
 
-namespace JiraLite.Api.Validation
+namespace JiraLite.Application.Validation
 {
     public class VerifyEmailDtoValidator : AbstractValidator<VerifyEmailDto>
     {

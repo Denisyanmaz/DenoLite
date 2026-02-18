@@ -1,4 +1,4 @@
-﻿using JiraLite.Application.Interfaces;
+using JiraLite.Application.Interfaces;
 using JiraLite.Domain.Common;
 using JiraLite.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +25,7 @@ namespace JiraLite.Infrastructure.Persistence
         public DbSet<TaskComment> Comments => Set<TaskComment>();
         public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
         public DbSet<EmailVerification> EmailVerifications => Set<EmailVerification>();
+        public DbSet<EmailChangeRequest> EmailChangeRequests => Set<EmailChangeRequest>();
 
 
         public override int SaveChanges()

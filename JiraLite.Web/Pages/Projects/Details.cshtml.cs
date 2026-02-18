@@ -1,4 +1,4 @@
-﻿using JiraLite.Application.DTOs;
+using JiraLite.Application.DTOs;
 using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.DTOs.Project;
 using JiraLite.Application.DTOs.ProjectMember;
@@ -606,10 +606,10 @@ namespace JiraLite.Web.Pages.Projects
                 var d = due.Value.Date;
                 var today = DateTime.UtcNow.Date;
 
-                if (d < today) return ($"Overdue ({d:yyyy-MM-dd})", "bg-danger");
-                if (d <= today.AddDays(3)) return ($"Due soon ({d:yyyy-MM-dd})", "bg-warning text-dark");
+                if (d < today) return ($"Overdue ({d:dd.MM.yyyy})", "bg-danger");
+                if (d <= today.AddDays(3)) return ($"Due soon ({d:dd.MM.yyyy})", "bg-warning text-dark");
 
-                return ($"{d:yyyy-MM-dd}", "bg-secondary");
+                return ($"{d:dd.MM.yyyy}", "bg-secondary");
             }
 
             var sb = new StringBuilder();

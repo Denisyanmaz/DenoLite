@@ -1,5 +1,4 @@
-﻿using JiraLite.Api.Filters;
-using JiraLite.Api.Services;
+using JiraLite.Api.Filters;
 using JiraLite.Application.Interfaces;
 using JiraLite.Infrastructure.Persistence;
 using JiraLite.Infrastructure.Services;
@@ -53,6 +52,7 @@ builder.Services.AddControllers()
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddValidatorsFromAssemblyContaining<JiraLite.Application.Validation.RegisterUserDtoValidator>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();

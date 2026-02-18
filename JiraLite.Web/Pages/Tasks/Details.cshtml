@@ -1,4 +1,4 @@
-﻿@page "{id:guid}"
+@page "{id:guid}"
 @model JiraLite.Web.Pages.Tasks.DetailsModel
 @using JiraLite.Domain.Enums
 
@@ -14,6 +14,7 @@
     <div class="d-flex gap-2">
         @if (Model.Task != null)
         {
+            <button class="btn btn-danger" onclick="deleteTask()">Delete Task</button>
             <a class="btn btn-outline-secondary" href="/Projects/Details/@Model.Task.ProjectId">Back to Project</a>
         }
     </div>
@@ -23,7 +24,11 @@
 {
     <div class="alert alert-danger" style="white-space:pre-wrap;">@Model.Error</div>
 }
-else
+
+@* Global Toast for notifications (delete, etc.) *@
+<div id="toast" class="alert d-none mb-3" role="alert"></div>
+
+@if (string.IsNullOrWhiteSpace(Model.Error))
 {
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
@@ -128,31 +133,16 @@ else
                 <div class="small text-muted">
                     ProjectId: <code>@Model.Task?.ProjectId</code>
                 </div>
-
-                <div id="toast" class="alert d-none mt-3 mb-0" role="alert"></div>
             </div>
         </div>
 
         <script>
-            // Server values for reset (keeps UI simple)
-            const serverTask = {
-                id: "@Model.Id",
-                projectId: "@Model.Task?.ProjectId",
-                title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Task?.Title ?? "")),
-                description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Task?.Description ?? "")),
-                status: "@Model.Task?.Status",
-                priority: "@(Model.Task?.Priority ?? 3)",
-                assigneeId: "@Model.Task?.AssigneeId",
-                dueDate: "@(Model.Task?.DueDate?.ToString("yyyy-MM-dd") ?? "")"
-            };
-
-            function showToast(message, ok = true) {
-                const el = document.getElementById("toast");
-                el.classList.remove("d-none", "alert-success", "alert-danger");
-                el.classList.add(ok ? "alert-success" : "alert-danger");
-                el.innerText = message;
-                setTimeout(() => el.classList.add("d-none"), 2500);
-            }
+            // Extend serverTask with full details for overview tab
+            serverTask.description = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Task?.Description ?? ""));
+            serverTask.status = "@Model.Task?.Status";
+            serverTask.priority = "@(Model.Task?.Priority ?? 3)";
+            serverTask.assigneeId = "@Model.Task?.AssigneeId";
+            serverTask.dueDate = "@(Model.Task?.DueDate?.ToString("yyyy-MM-dd") ?? "")";
 
             function setSaving(isSaving) {
               const btn = document.getElementById("btnSaveAll");
@@ -329,6 +319,51 @@ else
         </div>
     }
 }
+
+<script>
+    // Global toast notification function
+    function showToast(message, ok = true) {
+        const el = document.getElementById("toast");
+        if (!el) return;
+        el.classList.remove("d-none", "alert-success", "alert-danger");
+        el.classList.add(ok ? "alert-success" : "alert-danger");
+        el.innerText = message;
+        setTimeout(() => el.classList.add("d-none"), 3000);
+    }
+
+    // Server task data for delete function
+    const serverTask = {
+        id: "@Model.Id",
+        projectId: "@Model.Task?.ProjectId",
+        title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Task?.Title ?? ""))
+    };
+
+    async function deleteTask() {
+        if (!confirm(`Are you sure you want to delete "${serverTask.title}"? This will move it to the recycle bin.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`?handler=DeleteTask&id=${serverTask.id}`, {
+                method: "POST",
+                credentials: "include"
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                showToast(`Delete failed: ${res.status} ${txt}`, false);
+                return;
+            }
+
+            showToast("Task deleted. Redirecting...");
+            setTimeout(() => {
+                window.location.href = `/Projects/Details/${serverTask.projectId}`;
+            }, 1000);
+        } catch (e) {
+            showToast(`Delete error: ${e}`, false);
+        }
+    }
+</script>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

@@ -1,8 +1,8 @@
-﻿using JiraLite.Application.Interfaces;
+using JiraLite.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 
-namespace JiraLite.Api.Services;
+namespace JiraLite.Infrastructure.Services;
 
 public sealed class CurrentUserService : ICurrentUserService
 {

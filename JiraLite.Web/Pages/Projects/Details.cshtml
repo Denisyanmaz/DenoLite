@@ -1,4 +1,4 @@
-﻿@page "{id:guid}"
+@page "{id:guid}"
 @model JiraLite.Web.Pages.Projects.DetailsModel
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -107,8 +107,17 @@ else
                     </div>
 
                     <div class="col-md-3">
-                        <label class="form-label">AssigneeId</label>
-                        <input class="form-control" name="assigneeId" value="@(Model.AssigneeId?.ToString() ?? "")" />
+                        <label class="form-label">Assignee</label>
+                        <select class="form-select" name="assigneeId">
+                            <option value="">All</option>
+                            @foreach (var item in Model.AssigneeSelectItems)
+                            {
+                                <option value="@item.Value"
+                                        selected="@(Model.AssigneeId?.ToString() == item.Value)">
+                                    @item.Text
+                                </option>
+                            }
+                        </select>
                     </div>
 
                     <div class="col-md-2">
@@ -272,20 +281,34 @@ else
 
                     <div class="col-md-3">
                         <label class="form-label">ActionType</label>
-                        <input class="form-control" name="actionType" value="@(Model.ActivityActionType ?? "")"
-                               placeholder="TaskCreated / TaskStatusChanged / CommentAdded..." />
+                        <select class="form-select" name="actionType">
+                            <option value="">All</option>
+                            <option value="TaskCreated" selected="@(Model.ActivityActionType == "TaskCreated")">TaskCreated</option>
+                            <option value="TaskUpdated" selected="@(Model.ActivityActionType == "TaskUpdated")">TaskUpdated</option>
+                            <option value="TaskDeleted" selected="@(Model.ActivityActionType == "TaskDeleted")">TaskDeleted</option>
+                            <option value="TaskStatusChanged" selected="@(Model.ActivityActionType == "TaskStatusChanged")">TaskStatusChanged</option>
+                            <option value="CommentAdded" selected="@(Model.ActivityActionType == "CommentAdded")">CommentAdded</option>
+                        </select>
                     </div>
 
                     <div class="col-md-3">
-                        <label class="form-label">ActorId</label>
-                        <input class="form-control" name="actorId" value="@(Model.ActivityActorId?.ToString() ?? "")"
-                               placeholder="Guid (optional)" />
+                        <label class="form-label">Actor</label>
+                        <select class="form-select" name="actorId">
+                            <option value="">All</option>
+                            @foreach (var item in Model.AssigneeSelectItems)
+                            {
+                                <option value="@item.Value"
+                                        selected="@(Model.ActivityActorId?.ToString() == item.Value)">
+                                    @item.Text
+                                </option>
+                            }
+                        </select>
                     </div>
 
                     <div class="col-md-3">
                         <label class="form-label">TaskId</label>
                         <input class="form-control" name="taskId" value="@(Model.ActivityTaskId?.ToString() ?? "")"
-                               placeholder="Guid (optional)" />
+                               placeholder="Taskid (optional)" />
                     </div>
 
                     <div class="col-md-3">
@@ -322,12 +345,21 @@ else
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <span class="badge bg-secondary">@a.ActionType</span>
-                                    <span class="text-muted small">by <code>@a.ActorId</code></span>
+                                    <span class="text-muted small">by <code>@(Model.AssigneeEmailById.TryGetValue(a.ActorId, out var actorEmail) && !string.IsNullOrWhiteSpace(actorEmail) ? actorEmail : a.ActorId.ToString())</code></span>
 
                                     @if (a.TaskId.HasValue)
                                     {
                                         <span class="text-muted small">
-                                            • task <a href="/Tasks/Details/@a.TaskId.Value?tab=overview"><code>@a.TaskId.Value</code></a>
+                                            • task <a href="/Tasks/Details/@a.TaskId.Value?tab=overview">
+                                                @if (!string.IsNullOrWhiteSpace(a.TaskTitle))
+                                                {
+                                                    <strong>@a.TaskTitle</strong>
+                                                }
+                                                else
+                                                {
+                                                    <code>@a.TaskId.Value</code>
+                                                }
+                                            </a>
                                         </span>
                                     }
                                 </div>

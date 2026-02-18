@@ -1,4 +1,4 @@
-﻿using JiraLite.Application.DTOs.Common;
+using JiraLite.Application.DTOs.Common;
 using JiraLite.Application.DTOs.Task;
 using JiraLite.Application.Exceptions;
 using JiraLite.Application.Interfaces;
@@ -13,11 +13,13 @@ namespace JiraLite.Infrastructure.Services
     {
         private readonly JiraLiteDbContext _context;
         private readonly IActivityService _activity;
+        private readonly IEmailSender _emailSender;
 
-        public TaskService(JiraLiteDbContext context, IActivityService activity)
+        public TaskService(JiraLiteDbContext context, IActivityService activity, IEmailSender emailSender)
         {
             _context = context;
             _activity = activity;
+            _emailSender = emailSender;
         }
 
         // 🔹 Create Task (only project members)
@@ -44,13 +46,16 @@ namespace JiraLite.Infrastructure.Services
             _context.Tasks.Add(task);
             await _context.SaveChangesAsync();
 
+            var assigneeEmail = await GetUserEmailAsync(task.AssigneeId);
             await _activity.LogAsync(
                 projectId: task.ProjectId,
                 taskId: task.Id,
                 actorId: currentUserId,
                 actionType: "TaskCreated",
-                message: $"Task created: '{task.Title}' (Status: {task.Status}, Priority: {FormatPriority(task.Priority)}, Assignee: {task.AssigneeId}, Due: {FormatDue(task.DueDate)})"
+                message: $"Task created: '{task.Title}' (Status: {task.Status}, Priority: {FormatPriority(task.Priority)}, Assignee: {assigneeEmail}, Due: {FormatDue(task.DueDate)})"
             );
+
+            await SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
 
             return task;
         }
@@ -115,7 +120,7 @@ namespace JiraLite.Infrastructure.Services
 
             // ✅ build rich diff message
             static string P(int p) => $"P{p}";
-            static string Due(DateTime? d) => d.HasValue ? d.Value.ToString("yyyy-MM-dd") : "None";
+            static string Due(DateTime? d) => d.HasValue ? d.Value.ToString("dd.MM.yyyy") : "None";
 
             var changes = new List<string>();
 
@@ -129,7 +134,7 @@ namespace JiraLite.Infrastructure.Services
                 changes.Add($"Priority {P(beforePriority)} → {P(task.Priority)}");
 
             if (beforeAssignee != task.AssigneeId)
-                changes.Add($"Assignee {beforeAssignee} → {task.AssigneeId}");
+                changes.Add($"Assignee {await GetUserEmailAsync(beforeAssignee)} → {await GetUserEmailAsync(task.AssigneeId)}");
 
             if (beforeDue != task.DueDate)
                 changes.Add($"Due {Due(beforeDue)} → {Due(task.DueDate)}");
@@ -145,6 +150,9 @@ namespace JiraLite.Infrastructure.Services
                 actionType: "TaskUpdated",
                 message: message
             );
+
+            if (beforeAssignee != task.AssigneeId)
+                await SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
 
             return task;
         }
@@ -201,11 +209,14 @@ namespace JiraLite.Infrastructure.Services
             if (query.AssigneeId.HasValue)
                 tasks = tasks.Where(t => t.AssigneeId == query.AssigneeId.Value);
 
-            if (query.DueFrom.HasValue)
-                tasks = tasks.Where(t => t.DueDate.HasValue && t.DueDate.Value >= query.DueFrom.Value);
+            var dueFrom = AsUtc(query.DueFrom);
+            var dueTo   = AsUtc(query.DueTo);
 
-            if (query.DueTo.HasValue)
-                tasks = tasks.Where(t => t.DueDate.HasValue && t.DueDate.Value <= query.DueTo.Value);
+            if (dueFrom.HasValue)
+                tasks = tasks.Where(t => t.DueDate.HasValue && t.DueDate.Value >= dueFrom.Value);
+
+            if (dueTo.HasValue)
+                tasks = tasks.Where(t => t.DueDate.HasValue && t.DueDate.Value <= dueTo.Value);
 
             var total = await tasks.CountAsync();
 
@@ -246,10 +257,40 @@ namespace JiraLite.Infrastructure.Services
         }
 
 
+        private async Task<string> GetUserEmailAsync(Guid userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            return user?.Email ?? userId.ToString();
+        }
+
+        private async Task SendAssignmentEmailAsync(Guid assigneeId, string taskTitle, Guid taskId)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(assigneeId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var subject = $"You have been assigned a task: \"{taskTitle}\"";
+                var body = $"""
+                    <p>Hi,</p>
+                    <p>You have been assigned the following task in <strong>JiraLite</strong>:</p>
+                    <p><strong>{System.Net.WebUtility.HtmlEncode(taskTitle)}</strong></p>
+                    <p><a href="/Tasks/Details/{taskId}?tab=overview">View task</a></p>
+                    <p>— The JiraLite Team</p>
+                    """;
+
+                await _emailSender.SendAsync(user.Email, subject, body);
+            }
+            catch
+            {
+                // email failure must never break task operations
+            }
+        }
+
         private static string FormatPriority(int p) => $"P{p}";
 
         private static string FormatDue(DateTime? due)
-            => due.HasValue ? due.Value.ToString("yyyy-MM-dd") : "None";
+            => due.HasValue ? due.Value.ToString("dd.MM.yyyy") : "None";
 
         private static string Short(string? text, int max = 80)
         {
