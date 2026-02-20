@@ -42,11 +42,12 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+app.UseStaticFiles(); // ✅ This serves files from wwwroot
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// ✅ Map static assets (for scoped CSS from Razor components)
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();

@@ -11,7 +11,7 @@ namespace DenoLite.Application.Interfaces
         Task<TaskItem> CreateTaskAsync(TaskItemDto dto, Guid currentUserId);
         Task<TaskItem?> GetTaskByIdAsync(Guid taskId, Guid currentUserId);
         Task<List<TaskItem>> GetTasksByProjectAsync(Guid projectId, Guid currentUserId);
-        Task<PagedResult<TaskItem>> GetTasksByProjectPagedAsync(Guid projectId, Guid currentUserId, TaskQueryDto query);
+        Task<PagedResult<TaskItemBoardDto>> GetTasksByProjectPagedAsync(Guid projectId, Guid currentUserId, TaskQueryDto query);
         Task<TaskItem> UpdateTaskAsync(Guid taskId, TaskItemDto dto, Guid currentUserId);
         Task<TaskItem> UpdateTaskStatusAsync(Guid taskId, DenoTaskStatus status, Guid currentUserId);
         Task DeleteTaskAsync(Guid taskId, Guid currentUserId);

@@ -65,7 +65,17 @@ namespace DenoLite.Infrastructure.Services
             var email = dto.Email.Trim().ToLowerInvariant();
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            if (user == null)
+                throw new UnauthorizedAccessException("Invalid credentials");
+
+            // ✅ Check if user is Google-only (no password set)
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                throw new UnauthorizedAccessException("This account uses Google sign-in. Please sign in with Google instead.");
+            }
+
+            // Verify password
+            if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
                 throw new UnauthorizedAccessException("Invalid credentials");
 
             if (!user.IsActive)
@@ -230,15 +240,24 @@ namespace DenoLite.Infrastructure.Services
             if (user == null)
                 throw new NotFoundException("User not found.");
 
-            // Verify old password
-            if (!BCrypt.Net.BCrypt.Verify(oldPassword, user.PasswordHash))
-                throw new UnauthorizedAccessException("Current password is incorrect.");
+            // ✅ Check if user is Google-only (no password set)
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                // Google-only users can set a password (to enable email/password login)
+                // Skip old password verification
+            }
+            else
+            {
+                // Verify old password for users with existing passwords
+                if (!BCrypt.Net.BCrypt.Verify(oldPassword, user.PasswordHash))
+                    throw new UnauthorizedAccessException("Current password is incorrect.");
+            }
 
             // Validate new password
             if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
                 throw new BadRequestException("New password must be at least 6 characters.");
 
-            if (oldPassword == newPassword)
+            if (!string.IsNullOrEmpty(user.PasswordHash) && oldPassword == newPassword)
                 throw new BadRequestException("New password must be different from the current password.");
 
             // Update password
@@ -359,6 +378,58 @@ namespace DenoLite.Infrastructure.Services
 
             _db.EmailChangeRequests.Remove(changeRequest);
             await _db.SaveChangesAsync();
+        }
+
+        public async Task<AuthResponseDto> AuthenticateWithGoogleAsync(string googleId, string email)
+        {
+            email = email.Trim().ToLowerInvariant();
+
+            // Check if user exists by GoogleId or Email
+            var user = await _db.Users.FirstOrDefaultAsync(u => 
+                u.GoogleId == googleId || u.Email.ToLower() == email);
+
+            if (user == null)
+            {
+                // ✅ NEW USER: Create account automatically
+                user = new User
+                {
+                    Email = email,
+                    GoogleId = googleId,
+                    PasswordHash = string.Empty, // OAuth users don't have passwords
+                    Role = "User",
+                    IsActive = true,
+                    IsEmailVerified = true // Google emails are pre-verified
+                };
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+            }
+            else
+            {
+                // ✅ EXISTING USER: Link Google account if not already linked
+                if (string.IsNullOrEmpty(user.GoogleId))
+                {
+                    user.GoogleId = googleId;
+                    await _db.SaveChangesAsync();
+                }
+
+                // ✅ EXISTING USER: Ensure email is verified
+                if (!user.IsEmailVerified)
+                {
+                    user.IsEmailVerified = true;
+                    await _db.SaveChangesAsync();
+                }
+
+                if (!user.IsActive)
+                    throw new ForbiddenException("User is inactive.");
+            }
+
+            return new AuthResponseDto
+            {
+                Email = user.Email,
+                Role = user.Role,
+                Token = GenerateJwtToken(user)
+            };
         }
 
         private string GenerateSixDigitCode()

@@ -1,6 +1,7 @@
 using DenoLite.Application.DTOs.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Configuration;
 using System.ComponentModel.DataAnnotations;
 using System.Net.Http.Json;
 
@@ -9,16 +10,19 @@ namespace DenoLite.Web.Pages
     public class RegisterModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
-        public RegisterModel(IHttpClientFactory httpClientFactory)
+        public RegisterModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         [BindProperty]
         public RegisterInput Input { get; set; } = new();
 
         public string? Error { get; set; }
+        public string ApiBaseUrl => _configuration["Api:BaseUrl"] ?? "https://localhost:7144";
 
         public void OnGet() { }
 

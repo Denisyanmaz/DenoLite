@@ -52,7 +52,7 @@ namespace DenoLite.Web.Pages.Projects
         public DateTime? DueTo { get; set; }
 
         [FromQuery(Name = "page")]
-        public int Page { get; set; } = 1;
+        public int PageNumber { get; set; } = 1;
 
         [FromQuery(Name = "pageSize")]
         public int PageSize { get; set; } = 15;
@@ -112,10 +112,13 @@ namespace DenoLite.Web.Pages.Projects
         public string ProjectName { get; private set; } = "Project";
         public string? ProjectDescription { get; private set; }
 
-        public List<TaskItem> Tasks { get; private set; } = new();
-        public List<TaskItem> TodoTasks { get; private set; } = new();
-        public List<TaskItem> InProgressTasks { get; private set; } = new();
-        public List<TaskItem> DoneTasks { get; private set; } = new();
+        public List<TaskItemBoardDto> Tasks { get; private set; } = new();
+        public List<TaskItemBoardDto> TodoTasks { get; private set; } = new();
+        public List<TaskItemBoardDto> InProgressTasks { get; private set; } = new();
+        public List<TaskItemBoardDto> DoneTasks { get; private set; } = new();
+
+        /// <summary>User IDs of current project members (not removed). Used to show "member left" on board cards.</summary>
+        public HashSet<Guid> CurrentMemberIds { get; private set; } = new();
 
         public int TotalCount { get; private set; }
         public int TotalPages =>
@@ -351,10 +354,10 @@ namespace DenoLite.Web.Pages.Projects
 
         private async Task LoadBoardAsync(HttpClient client)
         {
-            if (Page < 1) Page = 1;
+            if (PageNumber < 1) PageNumber = 1;
             if (PageSize < 1) PageSize = 15;
 
-            var url = BuildTasksUrl(ProjectId, Status, Priority, AssigneeId, DueFrom, DueTo, Page, PageSize);
+            var url = BuildTasksUrl(ProjectId, Status, Priority, AssigneeId, DueFrom, DueTo, PageNumber, PageSize);
 
             var tasksResp = await client.GetAsync(url);
             if (!tasksResp.IsSuccessStatusCode)
@@ -364,7 +367,7 @@ namespace DenoLite.Web.Pages.Projects
                 return;
             }
 
-            var payload = await tasksResp.Content.ReadFromJsonAsync<PagedResult<TaskItem>>();
+            var payload = await tasksResp.Content.ReadFromJsonAsync<PagedResult<TaskItemBoardDto>>();
             Tasks = payload?.Items?.ToList() ?? new();
             TotalCount = payload?.TotalCount ?? 0;
 
@@ -534,6 +537,7 @@ namespace DenoLite.Web.Pages.Projects
         {
             AssigneeSelectItems = new List<SelectListItem>();
             AssigneeEmailById = new Dictionary<Guid, string?>();
+            CurrentMemberIds = new HashSet<Guid>();
 
             try
             {
@@ -554,6 +558,7 @@ namespace DenoLite.Web.Pages.Projects
                 {
                     // ✅ map for board display
                     AssigneeEmailById[m.UserId] = m.Email;
+                    CurrentMemberIds.Add(m.UserId);
 
                     // ✅ dropdown text shows email instead of guid (value remains guid!)
                     var label = string.IsNullOrWhiteSpace(m.Email)
@@ -658,8 +663,8 @@ namespace DenoLite.Web.Pages.Projects
             return message.Trim();
         }
 
-        // ✅ RenderColumn (kept exactly as your version)
-        public IHtmlContent RenderColumn(string status, List<TaskItem> items)
+        // ✅ RenderColumn: shows assignee email and red "member left" when assignee is no longer in project
+        public IHtmlContent RenderColumn(string status, List<TaskItemBoardDto> items)
         {
             var title = status switch
             {
@@ -719,10 +724,10 @@ namespace DenoLite.Web.Pages.Projects
                     var prioText = PriorityText(t.Priority);
                     var prioCss = PriorityBadgeClass(t.Priority);
                     var (dueText, dueCss) = DueBadge(t.DueDate);
-                    var assigneeLabel = AssigneeEmailById.TryGetValue(t.AssigneeId, out var email)
-    && !string.IsNullOrWhiteSpace(email)
-        ? email
-        : t.AssigneeId.ToString();
+                    var assigneeLabel = !string.IsNullOrWhiteSpace(t.AssigneeEmail)
+                        ? t.AssigneeEmail
+                        : t.AssigneeId.ToString();
+                    var memberLeft = !CurrentMemberIds.Contains(t.AssigneeId);
 
                     var statusSelect = $@"
 <select class=""form-select form-select-sm quick-status""
@@ -756,8 +761,9 @@ namespace DenoLite.Web.Pages.Projects
         {statusSelect}
       </div>
 
-      <div class=""text-muted small mt-2"">
+      <div class=""text-muted small mt-2 d-flex align-items-center gap-1"">
         Assignee: <code>{System.Net.WebUtility.HtmlEncode(assigneeLabel)}</code>
+        {(memberLeft ? @"<span class=""text-danger ms-1"" title=""Member left project"">●</span>" : "")}
       </div>
     </div>
   </div>

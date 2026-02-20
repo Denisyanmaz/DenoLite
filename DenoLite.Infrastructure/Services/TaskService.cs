@@ -199,7 +199,7 @@ namespace DenoLite.Infrastructure.Services
             );
         }
 
-        public async Task<PagedResult<TaskItem>> GetTasksByProjectPagedAsync(
+        public async Task<PagedResult<TaskItemBoardDto>> GetTasksByProjectPagedAsync(
             Guid projectId,
             Guid currentUserId,
             TaskQueryDto query)
@@ -234,16 +234,29 @@ namespace DenoLite.Infrastructure.Services
 
             var total = await tasks.CountAsync();
 
-            // Deterministic ordering for stable paging + tests
+            // Join with Users to get assignee email (including assignees who left the project)
             var items = await tasks
-                .OrderBy(t => t.DueDate == null)     // tasks with DueDate first (false before true)
-                .ThenBy(t => t.DueDate)              // then by due date
-                .ThenBy(t => t.Id)                   // tie-breaker
+                .Join(_context.Users, t => t.AssigneeId, u => u.Id, (t, u) => new { t, u })
+                .OrderBy(x => x.t.DueDate == null)
+                .ThenBy(x => x.t.DueDate)
+                .ThenBy(x => x.t.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
+                .Select(x => new TaskItemBoardDto
+                {
+                    Id = x.t.Id,
+                    Title = x.t.Title,
+                    Description = x.t.Description,
+                    Status = x.t.Status,
+                    Priority = x.t.Priority,
+                    AssigneeId = x.t.AssigneeId,
+                    AssigneeEmail = x.u.Email,
+                    ProjectId = x.t.ProjectId,
+                    DueDate = x.t.DueDate
+                })
                 .ToListAsync();
 
-            return new PagedResult<TaskItem>(items, query.Page, query.PageSize, total);
+            return new PagedResult<TaskItemBoardDto>(items, query.Page, query.PageSize, total);
         }
         public async Task<TaskItem> UpdateTaskStatusAsync(Guid taskId, DenoTaskStatus status, Guid currentUserId)
         {

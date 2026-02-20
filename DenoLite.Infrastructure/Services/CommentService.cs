@@ -48,11 +48,13 @@ namespace DenoLite.Infrastructure.Services
                 message: $"Comment added on task '{task.Title}': \"{Short(dto.Body, 80)}\""
             );
 
+            var author = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId);
             return new CommentDto
             {
                 Id = comment.Id,
                 TaskId = comment.TaskId,
                 AuthorId = comment.AuthorId,
+                AuthorEmail = author?.Email,
                 Body = comment.Body,
                 CreatedAt = comment.CreatedAt
             };
@@ -71,13 +73,15 @@ namespace DenoLite.Infrastructure.Services
             return await _db.Comments
                 .Where(c => c.TaskId == taskId)
                 .OrderBy(c => c.CreatedAt)
-                .Select(c => new CommentDto
+                .Join(_db.Users, c => c.AuthorId, u => u.Id, (c, u) => new { c, u })
+                .Select(x => new CommentDto
                 {
-                    Id = c.Id,
-                    TaskId = c.TaskId,
-                    AuthorId = c.AuthorId,
-                    Body = c.Body,
-                    CreatedAt = c.CreatedAt
+                    Id = x.c.Id,
+                    TaskId = x.c.TaskId,
+                    AuthorId = x.c.AuthorId,
+                    AuthorEmail = x.u.Email,
+                    Body = x.c.Body,
+                    CreatedAt = x.c.CreatedAt
                 })
                 .ToListAsync();
         }
@@ -86,7 +90,7 @@ namespace DenoLite.Infrastructure.Services
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
             text = text.Trim();
-            return text.Length <= max ? text : text.Substring(0, max) + "…";
+            return text.Length <= max ? text : text.Substring(0, max) + "";
         }
     }
 }

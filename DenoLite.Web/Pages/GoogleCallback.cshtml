@@ -1,0 +1,23 @@
+@page
+@model DenoLite.Web.Pages.GoogleCallbackModel
+
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <div class="alert alert-danger">@Model.Error</div>
+    <a href="/Login" class="btn btn-primary">Go to Login</a>
+}
+else
+{
+    <div class="alert alert-success">Successfully authenticated with Google! Redirecting...</div>
+}
+
+@section Scripts {
+    @if (string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <script>
+            setTimeout(function() {
+                window.location.href = '/Projects/Index';
+            }, 1000);
+        </script>
+    }
+}

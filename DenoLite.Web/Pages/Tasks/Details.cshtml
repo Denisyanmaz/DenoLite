@@ -274,7 +274,7 @@
                             <div class="list-group-item">
                                 <div class="d-flex justify-content-between">
                                     <div class="text-muted small">
-                                        by <code>@c.AuthorId</code>
+                                        by <code>@(string.IsNullOrEmpty(c.AuthorEmail) ? c.AuthorId.ToString() : c.AuthorEmail)</code>
                                     </div>
                                     <div class="text-muted small">
                                         @c.CreatedAt.ToString("yyyy-MM-dd HH:mm")
