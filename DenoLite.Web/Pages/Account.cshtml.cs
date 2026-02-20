@@ -23,8 +23,8 @@ namespace DenoLite.Web.Pages
         public async Task<IActionResult> OnPostChangePasswordAsync()
         {
             var dto = await Request.ReadFromJsonAsync<ChangePasswordRequest>();
-            if (dto == null || string.IsNullOrWhiteSpace(dto.OldPassword) || string.IsNullOrWhiteSpace(dto.NewPassword))
-                return BadRequest("Missing password fields.");
+            if (dto == null || string.IsNullOrWhiteSpace(dto.NewPassword))
+                return BadRequest("New password is required.");
 
             var client = _httpClientFactory.CreateClient("DenoLiteApi");
 

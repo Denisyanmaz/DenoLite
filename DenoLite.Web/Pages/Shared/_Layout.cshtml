@@ -134,7 +134,8 @@
                     <form id="changePasswordForm">
                         <div class="mb-3">
                             <label for="oldPassword" class="form-label">Current Password</label>
-                            <input type="password" class="form-control" id="oldPassword" required>
+                            <input type="password" class="form-control" id="oldPassword" placeholder="Leave blank if you signed in with Google">
+                            <div class="form-text">Leave blank if you only use Google sign-in</div>
                         </div>
                         <div class="mb-3">
                             <label for="newPassword" class="form-label">New Password</label>
@@ -215,9 +216,9 @@
             const alertDiv = document.getElementById('changePasswordAlert');
             const btn = this;
 
-            // Validation
-            if (!oldPassword || !newPassword || !confirmPassword) {
-                showPasswordAlert('Please fill in all fields.', false);
+            // Validation (current password optional for Google-only users)
+            if (!newPassword || !confirmPassword) {
+                showPasswordAlert('Please enter and confirm your new password.', false);
                 return;
             }
 
@@ -231,7 +232,7 @@
                 return;
             }
 
-            if (oldPassword === newPassword) {
+            if (oldPassword && oldPassword === newPassword) {
                 showPasswordAlert('New password must be different from the current password.', false);
                 return;
             }

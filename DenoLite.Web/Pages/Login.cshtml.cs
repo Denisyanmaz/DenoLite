@@ -3,6 +3,7 @@ using DenoLite.Web.Helpers;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Configuration;
 using System.ComponentModel.DataAnnotations;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -12,16 +13,19 @@ namespace DenoLite.Web.Pages
     public class LoginModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
-        public LoginModel(IHttpClientFactory httpClientFactory)
+        public LoginModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         [BindProperty]
         public LoginInput Input { get; set; } = new();
         public string? Success { get; set; }
         public string? Error { get; set; }
+        public string ApiBaseUrl => _configuration["Api:BaseUrl"] ?? "https://localhost:7144";
 
         public void OnGet(string? email = null, bool verified = false)
         {

@@ -11,5 +11,6 @@ namespace DenoLite.Application.Interfaces
         Task ChangePasswordAsync(Guid userId, string oldPassword, string newPassword);
         Task RequestEmailChangeAsync(Guid userId, string password, string newEmail);
         Task VerifyAndChangeEmailAsync(Guid userId, string newEmail, string code);
+        Task<AuthResponseDto> AuthenticateWithGoogleAsync(string googleId, string email);
     }
 }

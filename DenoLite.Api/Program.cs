@@ -3,6 +3,8 @@ using DenoLite.Application.Interfaces;
 using DenoLite.Infrastructure.Persistence;
 using DenoLite.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -88,12 +90,20 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 
 
 // 🔹 JWT Authentication
-var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is required");
+var key = Encoding.UTF8.GetBytes(jwtKey);
 
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+})
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(5); // Short-lived, just for OAuth flow
 })
 .AddJwtBearer(options =>
 {
@@ -116,9 +126,35 @@ builder.Services.AddAuthentication(options =>
         NameClaimType = "id",
         RoleClaimType = ClaimTypes.Role
     };
+})
+.AddGoogle(options =>
+{
+    options.ClientId = builder.Configuration["Google:ClientId"] ?? throw new InvalidOperationException("Google:ClientId is required");
+    options.ClientSecret = builder.Configuration["Google:ClientSecret"] ?? throw new InvalidOperationException("Google:ClientSecret is required");
+    options.CallbackPath = "/api/auth/google-callback";
+    options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme; // Use Cookies for sign-in
+    
+    // Request email and profile scopes
+    options.Scope.Add("email");
+    options.Scope.Add("profile");
+    
+    // Save tokens for later use if needed
+    options.SaveTokens = true;
 });
 builder.Services.AddTransient<DenoLite.Api.Middleware.ExceptionHandlingMiddleware>();
 builder.Services.AddAuthorization();
+
+// 🔹 CORS Configuration
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowWebApp", policy =>
+    {
+        policy.WithOrigins("https://localhost:7002", "http://localhost:5142")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
 
 var app = builder.Build();
 
@@ -132,6 +168,12 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 app.UseMiddleware<DenoLite.Api.Middleware.ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
+
+// 🔹 CORS must be before UseAuthentication
+app.UseCors("AllowWebApp");
+
+// 🔹 Routing must be before Authentication for controller routes to work
+app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
