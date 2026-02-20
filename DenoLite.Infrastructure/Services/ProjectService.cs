@@ -36,6 +36,11 @@ namespace DenoLite.Infrastructure.Services
 
         public async Task<ProjectDto> CreateAsync(Guid userId, CreateProjectDto dto)
         {
+            // Verify user exists before creating project
+            var userExists = await _db.Users.AnyAsync(u => u.Id == userId);
+            if (!userExists)
+                throw new BadRequestException("User not found. Cannot create project for non-existent user.");
+
             var project = new Project
             {
                 Name = dto.Name,
@@ -45,9 +50,9 @@ namespace DenoLite.Infrastructure.Services
 
             _db.Projects.Add(project);
 
-            _db.ProjectMembers.Add(new ProjectMember
+            // Use navigation property so EF Core handles the relationship correctly
+            project.Members.Add(new ProjectMember
             {
-                ProjectId = project.Id,
                 UserId = userId,
                 Role = "Owner"
             });

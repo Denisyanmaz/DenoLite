@@ -1,12 +1,9 @@
 @page
 @model DenoLite.Web.Pages.Projects.CreateModel
 
-<div style="display:flex; justify-content:space-between; align-items:center;">
-    <h2>Create Project</h2>
-    <div>
-        <a href="/Projects">Back</a> |
-        <a href="/Logout">Logout</a>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Create Project</h2>
+    <a class="btn btn-outline-secondary btn-sm" href="/Projects">Back</a>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(Model.Error))

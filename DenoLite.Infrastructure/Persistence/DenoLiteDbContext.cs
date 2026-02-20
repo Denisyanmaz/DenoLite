@@ -110,10 +110,10 @@ namespace DenoLite.Infrastructure.Persistence
             {
                 entity.Property(p => p.Name)
                       .IsRequired()
-                      .HasMaxLength(200);
+                      .HasMaxLength(50);
 
                 entity.Property(p => p.Description)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(400);
 
                 // owner is required (domain invariant)
                 entity.Property(p => p.OwnerId)
@@ -173,10 +173,10 @@ namespace DenoLite.Infrastructure.Persistence
             {
                 entity.Property(t => t.Title)
                       .IsRequired()
-                      .HasMaxLength(100);
+                      .HasMaxLength(50);
 
                 entity.Property(t => t.Description)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(500);
 
                 entity.Property(t => t.Priority)
                       .IsRequired();

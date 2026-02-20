@@ -738,33 +738,50 @@ namespace DenoLite.Web.Pages.Projects
 </select>";
 
                     var encodedTitle = System.Net.WebUtility.HtmlEncode(t.Title);
+                    var encodedDescription = !string.IsNullOrWhiteSpace(t.Description) 
+                        ? System.Net.WebUtility.HtmlEncode(t.Description) 
+                        : "";
+                    
                     sb.AppendLine($@"
 <a href=""/Tasks/Details/{t.Id}?tab=overview"" class=""text-decoration-none text-dark task-link""
    draggable=""true"" data-task-id=""{t.Id}"" data-status=""{t.Status}"">
-  <div class=""card mb-2 shadow-sm"">
-    <div class=""card-body p-2"">
-      <div class=""d-flex justify-content-between align-items-start gap-2"">
-        <div class=""fw-semibold flex-grow-1"" style=""line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;"" title=""{encodedTitle}"">{encodedTitle}</div>
-        <span class=""badge {prioCss} flex-shrink-0"" title=""Priority"">{prioText}</span>
-      </div>");
+  <div class=""card mb-3 shadow-sm task-card"" style=""transition: transform 0.2s, box-shadow 0.2s;"">
+    <div class=""card-body p-3"">
+      <!-- Title Section -->
+      <div class=""mb-2"">
+        <h6 class=""card-title mb-0 fw-semibold"" style=""line-height: 1.4; word-wrap: break-word; word-break: break-word;"" title=""{System.Net.WebUtility.HtmlEncode(t.Title ?? "")}"">
+          {encodedTitle}
+        </h6>
+      </div>
 
-                    if (!string.IsNullOrWhiteSpace(t.Description))
-                    {
-                        sb.AppendLine($@"
-      <div class=""text-muted small mt-1"" style=""display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"">
-        {System.Net.WebUtility.HtmlEncode(t.Description)}
-      </div>");
-                    }
+      <!-- Description Section -->
+      {(string.IsNullOrWhiteSpace(t.Description) ? "" : $@"
+      <div class=""mb-3"">
+        <p class=""text-muted small mb-0"" style=""line-height: 1.5; word-wrap: break-word; word-break: break-word;"">
+          {encodedDescription}
+        </p>
+      </div>")}
 
-                    sb.AppendLine($@"
-      <div class=""d-flex justify-content-between align-items-center mt-2"">
-        <span class=""badge {dueCss}"" title=""Due date"">{dueText}</span>
+      <!-- Badges Row -->
+      <div class=""d-flex flex-wrap align-items-center gap-2 mb-2"">
+        <span class=""badge {prioCss}"" title=""Priority: {prioText}"">{prioText}</span>
+        <span class=""badge {dueCss}"" title=""Due date: {dueText}"">{dueText}</span>
+      </div>
+
+      <!-- Status Dropdown -->
+      <div class=""mb-2"">
         {statusSelect}
       </div>
 
-      <div class=""text-muted small mt-2 d-flex align-items-center gap-1"">
-        Assignee: <code>{System.Net.WebUtility.HtmlEncode(assigneeLabel)}</code>
-        {(memberLeft ? @"<span class=""text-danger ms-1"" title=""Member left project"">●</span>" : "")}
+      <!-- Assignee Section -->
+      <div class=""border-top pt-2 mt-2"">
+        <div class=""d-flex align-items-center gap-1"">
+          <small class=""text-muted"">Assignee:</small>
+          <small class=""text-truncate"" style=""max-width: 150px;"" title=""{System.Net.WebUtility.HtmlEncode(assigneeLabel)}"">
+            <code class=""small"">{System.Net.WebUtility.HtmlEncode(assigneeLabel)}</code>
+          </small>
+          {(memberLeft ? @"<span class=""text-danger"" title=""Member left project"">⚠</span>" : "")}
+        </div>
       </div>
     </div>
   </div>
@@ -782,10 +799,10 @@ namespace DenoLite.Web.Pages.Projects
         public class CreateTaskInputModel
         {
             [Required]
-            [StringLength(100, MinimumLength = 3)]
+            [StringLength(50, MinimumLength = 3)]
             public string Title { get; set; } = "";
 
-            [StringLength(2000)]
+            [StringLength(500)]
             public string? Description { get; set; }
 
             public DenoTaskStatus Status { get; set; } = DenoTaskStatus.Todo;

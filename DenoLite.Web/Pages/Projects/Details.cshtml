@@ -6,11 +6,7 @@
         <div class="text-muted small">
             <a href="/Projects">Projects</a> / Details
         </div>
-        <h2 class="mb-0">@Model.ProjectName</h2>
-        @if (!string.IsNullOrWhiteSpace(Model.ProjectDescription))
-        {
-            <div class="text-muted">@Model.ProjectDescription</div>
-        }
+        <h2 class="mb-0" style="white-space:pre-wrap; word-wrap:break-word; overflow-wrap:break-word;">@Model.ProjectName</h2>
     </div>
 
     <div>
@@ -188,7 +184,7 @@ else
 
                             <div class="col-12">
                                 <label class="form-label">Description</label>
-                                <textarea class="form-control" asp-for="CreateTaskInput.Description"></textarea>
+                                <textarea class="form-control" asp-for="CreateTaskInput.Description" maxlength="500"></textarea>
                             </div>
 
                             <div class="col-md-4">
