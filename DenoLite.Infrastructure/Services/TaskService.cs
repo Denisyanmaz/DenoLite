@@ -62,7 +62,8 @@ namespace DenoLite.Infrastructure.Services
                 message: $"Task created: '{task.Title}' (Status: {task.Status}, Priority: {FormatPriority(task.Priority)}, Assignee: {assigneeEmail}, Due: {FormatDue(task.DueDate)})"
             );
 
-            await SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
+            // Don't await: email must not block the response (SMTP can hang on Render)
+            _ = SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
 
             return task;
         }
@@ -166,7 +167,7 @@ namespace DenoLite.Infrastructure.Services
             );
 
             if (beforeAssignee != task.AssigneeId)
-                await SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
+                _ = SendAssignmentEmailAsync(task.AssigneeId, task.Title, task.Id);
 
             return task;
         }

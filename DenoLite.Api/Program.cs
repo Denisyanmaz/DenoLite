@@ -15,6 +15,7 @@ using System.Text;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using dotenv.net;
+using Microsoft.AspNetCore.HttpOverrides;
 
 
 // ✅ VERY IMPORTANT: stop ASP.NET from remapping JWT claims (sub → NameIdentifier)
@@ -36,6 +37,15 @@ var builder = WebApplication.CreateBuilder(args);
 // ✅ Allow user-secrets for local runs even in Production environment
 // (User-secrets exist only on your machine; server won't have them anyway.)
 builder.Configuration.AddUserSecrets<Program>(optional: true);
+
+// 🔹 Forwarded headers (so Request.Scheme is https behind Render/proxy; fixes Google redirect_uri_mismatch)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // 🔹 Add services to the container
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
@@ -148,12 +158,15 @@ builder.Services.AddTransient<DenoLite.Api.Middleware.ExceptionHandlingMiddlewar
 builder.Services.AddAuthorization();
 // ✅ [Authorize] attribute will require authentication by default
 
-// 🔹 CORS Configuration
+// 🔹 CORS Configuration (Cors:AllowedOrigins in config, or localhost for dev)
+var corsOrigins = builder.Configuration["Cors:AllowedOrigins"]?
+    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? new[] { "https://localhost:7002", "http://localhost:5142" };
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowWebApp", policy =>
     {
-        policy.WithOrigins("https://localhost:7002", "http://localhost:5142")
+        policy.WithOrigins(corsOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -171,6 +184,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 
 app.UseMiddleware<DenoLite.Api.Middleware.ExceptionHandlingMiddleware>();
 
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 
 // 🔹 CORS must be before UseAuthentication

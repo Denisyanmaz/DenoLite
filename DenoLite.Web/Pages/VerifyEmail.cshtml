@@ -5,15 +5,15 @@
 }
 
 <h1>Verify your email</h1>
-<p>We sent a 6-digit code to your email. Enter it below.</p>
+<p>We sent a 6-digit code to your email. Enter it below. Check your spam folder if you don't see it.</p>
 
 @if (!string.IsNullOrWhiteSpace(Model.Success))
 {
-    <div class="alert alert-success">@Model.Success</div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">@Model.Success</div>
 }
 @if (!string.IsNullOrWhiteSpace(Model.Error))
 {
-    <div class="alert alert-danger">@Model.Error</div>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">@Model.Error</div>
 }
 
 <!-- ? Verify form -->

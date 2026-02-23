@@ -11,7 +11,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using DenoLite.Application.Exceptions;
-
+using Microsoft.Extensions.Logging;
 
 namespace DenoLite.Infrastructure.Services
 {
@@ -20,12 +20,14 @@ namespace DenoLite.Infrastructure.Services
         private readonly DenoLiteDbContext _db;
         private readonly IConfiguration _config;
         private readonly IEmailSender _emailSender;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(DenoLiteDbContext db, IConfiguration config, IEmailSender emailSender)
+        public AuthService(DenoLiteDbContext db, IConfiguration config, IEmailSender emailSender, ILogger<AuthService> logger)
         {
             _db = db;
             _config = config;
             _emailSender = emailSender;
+            _logger = logger;
         }
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterUserDto dto)
@@ -159,8 +161,15 @@ namespace DenoLite.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
 
-            var existing = await _db.EmailVerifications.SingleOrDefaultAsync(v => v.UserId == user.Id);
-            var previousSendCount = existing?.SendCount ?? 0;
+            var existing = await _db.EmailVerifications
+                .Where(v => v.UserId == user.Id)
+                .OrderByDescending(v => v.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            // ✅ Reset resend count if last send was more than 1 hour ago (so "wait and try again" works)
+            var effectiveSendCount = existing == null ? 0
+                : (now - existing.LastSentAt).TotalHours >= 1 ? 0
+                : existing.SendCount;
 
             // ✅ cooldown: 60 seconds between sends
             if (existing != null)
@@ -170,9 +179,9 @@ namespace DenoLite.Infrastructure.Services
                     throw new TooManyRequestsException("Please wait before requesting another code.");
             }
 
-            // ✅ basic resend limit
-            if (previousSendCount >= 5)
-                throw new Exception("Too many resend requests. Please try later.");
+            // ✅ Limit: max 5 resends per hour (effective count resets after 1 hour)
+            if (effectiveSendCount >= 5)
+                throw new TooManyRequestsException("Too many resend requests. Please try again in an hour.");
 
             // replace old record if exists
             if (existing != null)
@@ -191,7 +200,7 @@ namespace DenoLite.Infrastructure.Services
                 ExpiresAt = now.AddMinutes(15),
                 Attempts = 0,
                 LastSentAt = now,
-                SendCount = previousSendCount + 1,
+                SendCount = effectiveSendCount + 1,
                 IsUsed = false
             };
 
@@ -207,7 +216,20 @@ namespace DenoLite.Infrastructure.Services
                     <p>This code expires in 15 minutes.</p>
                 </div>";
 
-            await _emailSender.SendAsync(user.Email, subject, html);
+            // Fire-and-forget so API returns immediately (avoids Web timeout when SMTP hangs on Render)
+            _ = SendVerificationEmailAsync(user.Email, subject, html);
+        }
+
+        private async Task SendVerificationEmailAsync(string email, string subject, string html)
+        {
+            try
+            {
+                await _emailSender.SendAsync(email, subject, html);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send verification email to {Email}", email);
+            }
         }
 
         private string GenerateJwtToken(User user)
@@ -385,9 +407,9 @@ namespace DenoLite.Infrastructure.Services
         {
             email = email.Trim().ToLowerInvariant();
 
-            // Check if user exists by GoogleId or Email
+            // Check if user exists by GoogleId or Email (guard against null Email)
             var user = await _db.Users.FirstOrDefaultAsync(u => 
-                u.GoogleId == googleId || u.Email.ToLower() == email);
+                u.GoogleId == googleId || (u.Email != null && u.Email.ToLower() == email));
 
             if (user == null)
             {

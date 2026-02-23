@@ -9,10 +9,12 @@ namespace DenoLite.Web.Pages
     public class VerifyEmailModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<VerifyEmailModel> _logger;
 
-        public VerifyEmailModel(IHttpClientFactory httpClientFactory)
+        public VerifyEmailModel(IHttpClientFactory httpClientFactory, ILogger<VerifyEmailModel> logger)
         {
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         [BindProperty]
@@ -30,9 +32,14 @@ namespace DenoLite.Web.Pages
         public async Task<IActionResult> OnPostAsync()
         {
             if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("Verify email: validation failed, not calling API. Errors: {Errors}",
+                    string.Join("; ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
                 return Page();
+            }
 
             var client = _httpClientFactory.CreateClient("DenoLiteApi");
+            _logger.LogInformation("Verify email: calling API POST /api/auth/verify-email for {Email}", Input.Email);
 
             // API expects: { email, code }
             var resp = await client.PostAsJsonAsync("/api/auth/verify-email", new
@@ -40,6 +47,8 @@ namespace DenoLite.Web.Pages
                 email = Input.Email,
                 code = Input.Code
             });
+
+            _logger.LogInformation("Verify email: API responded {StatusCode}", resp.StatusCode);
 
             if (!resp.IsSuccessStatusCode)
             {
