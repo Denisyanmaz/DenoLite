@@ -16,8 +16,8 @@ Make sure your repo is on GitHub (you already use it).
 2. **Dashboard** → **New +** → **PostgreSQL**.
 3. **Name:** e.g. `denolite-db`. **Region:** pick one near you. **Create Database**.
 4. When it’s ready, open the DB and copy:
-   - **Internal Database URL** (use this in the API service on Render).
-   - **External Database URL** (use this from your PC to run migrations).
+   - **Internal Database URL** → use as `ConnectionStrings__DefaultConnection` in the **API** Web Service env vars (step 3). The API runs on Render and connects with this.
+   - **External Database URL** → use when running migrations from your PC (step 4). Your machine is outside Render, so it needs this URL to reach the DB.
 
 ---
 
@@ -30,22 +30,27 @@ Make sure your repo is on GitHub (you already use it).
 5. **Runtime:** **Docker**.
 6. **Dockerfile path:** `DenoLite.Api/Dockerfile`.
 7. **Instance type:** **Free**.
-8. **Advanced** → **Environment Variables.** Add:
+8. **Advanced** → **Environment Variables.** Add these (values from your `DenoLite.Api/.env.production` where noted; **never commit that file**):
 
-   | Key | Value |
-   |-----|--------|
+   | Key | Where to get the value |
+   |-----|------------------------|
    | `ASPNETCORE_ENVIRONMENT` | `Production` |
-   | `ConnectionStrings__DefaultConnection` | *(Internal Database URL from step 2)* |
-   | `Jwt__Key` | *(long random string, e.g. 32+ chars)* |
-   | `Jwt__Issuer` | `https://denolite-api.onrender.com` *(replace with your API URL after first deploy)* |
-   | `Jwt__Audience` | same as Issuer |
-   | `Email__Host` | *(your SMTP host, or leave if you skip email)* |
-   | `Email__Port` | `587` |
-   | `Email__UseSsl` | `true` |
-   | `Email__FromName` | `DenoLite` |
-   | `Email__From` | *(your from address)* |
+   | `ConnectionStrings__DefaultConnection` | **Render Internal Database URL** from step 2 (do *not* use the value from .env.production — that’s your local DB) |
+   | `Jwt__Key` | Copy from `.env.production` |
+   | `Jwt__Issuer` | After first deploy: your API URL (e.g. `https://denolite-api.onrender.com`) |
+   | `Jwt__Audience` | Same as `Jwt__Issuer` |
+   | `Email__Host` | Copy from `.env.production` |
+   | `Email__Port` | Copy from `.env.production` (e.g. `587`) |
+   | `Email__UseSsl` | Copy from `.env.production` (e.g. `true`) |
+   | `Email__FromEmail` | Copy from `.env.production` |
+   | `Email__FromName` | Copy from `.env.production` |
+   | `Email__Username` | Copy from `.env.production` |
+   | `Email__Password` | Copy from `.env.production` |
+   | `Otp__Secret` | Copy from `.env.production` |
+   | `Google__ClientId` | Copy from `.env.production` |
+   | `Google__ClientSecret` | Copy from `.env.production` |
 
-   For Google login, add your Google client ID/secret if you use them (same keys as in appsettings).
+   For Google login to work on Render, add your Render Web app URL to the allowed redirect URIs in Google Cloud Console (e.g. `https://denolite-web.onrender.com/signin-google` or your actual callback path).
 
 9. **Create Web Service.** Wait for the first deploy. Then copy the service URL (e.g. `https://denolite-api.onrender.com`).
 10. **Environment** → set `Jwt__Issuer` and `Jwt__Audience` to that URL if you used a placeholder. **Save changes** (triggers a redeploy).
@@ -102,6 +107,17 @@ The API reads this from config so the Web app can call it.
 - [ ] Web env var `Api__BaseUrl` = API URL (step 5).
 - [ ] CORS allows the Web URL (step 6).
 - [ ] **1–2 minutes before the demo:** open the **Web** URL in the browser so the free instance wakes up (no “loading” delay in front of your boss).
+
+---
+
+## If deploy fails with "Exited with status 139"
+
+Exit 139 often means the process was killed (e.g. out of memory) or a runtime crash.
+
+1. **Env var names** – In Render use **two underscores** for nested config: `Jwt__Issuer`, `Jwt__Audience`, `ConnectionStrings__DefaultConnection` (not `Jwt_Issuer`). Single underscore does not map to `Jwt:Issuer`.
+2. **Check full logs** – In Render open **Logs** for the service and scroll up. Look for "Out of memory", "Killed", or an exception message before the exit.
+3. **GC limit** – The API Dockerfile sets `DOTNET_GCHeapHardLimit` to reduce OOM risk on the free tier. Commit and redeploy.
+4. **Try .NET 9** – If it still fails, switch the API (and Web) to .NET 9 for deploy: in both Dockerfiles use `sdk:9.0` and `aspnet:9.0`, and set `TargetFramework` to `net9.0` in `DenoLite.Api.csproj` and `DenoLite.Web.csproj` (and downgrade package versions to 9.x). Then redeploy.
 
 ---
 
