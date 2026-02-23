@@ -39,13 +39,15 @@ Make sure your repo is on GitHub (you already use it).
    | `Jwt__Key` | Copy from `.env.production` |
    | `Jwt__Issuer` | After first deploy: your API URL (e.g. `https://denolite-api.onrender.com`) |
    | `Jwt__Audience` | Same as `Jwt__Issuer` |
-   | `Email__Host` | Copy from `.env.production` |
-   | `Email__Port` | Copy from `.env.production` (e.g. `587`) |
-   | `Email__UseSsl` | Copy from `.env.production` (e.g. `true`) |
-   | `Email__FromEmail` | Copy from `.env.production` |
-   | `Email__FromName` | Copy from `.env.production` |
-   | `Email__Username` | Copy from `.env.production` |
-   | `Email__Password` | Copy from `.env.production` |
+   | **Email (choose one)** | |
+   | `Resend__ApiKey` | **Recommended on Render.** Sign up at [resend.com](https://resend.com), create an API key, add your domain (or use `onboarding@resend.dev` as `Email__FromEmail` for testing). If set, the app uses Resend’s HTTP API instead of SMTP (avoids “operation has timed out” when Render blocks SMTP). |
+   | `Email__FromEmail` | Sender address (e.g. `onboarding@resend.dev` for Resend test, or your verified domain). |
+   | `Email__FromName` | Sender name (e.g. `DenoLite`). |
+   | `Email__Host` | Only if **not** using Resend (SMTP host). |
+   | `Email__Port` | Only if using SMTP (e.g. `587`). |
+   | `Email__UseSsl` | Only if using SMTP (e.g. `true`). |
+   | `Email__Username` | Only if using SMTP. |
+   | `Email__Password` | Only if using SMTP. |
    | `Otp__Secret` | Copy from `.env.production` |
    | `Google__ClientId` | Copy from `.env.production` |
    | `Google__ClientSecret` | Copy from `.env.production` |
@@ -54,6 +56,8 @@ Make sure your repo is on GitHub (you already use it).
    For Google login: in Google Cloud Console add **Authorised redirect URI** `https://YOUR-API-URL/api/auth/google-callback` (e.g. `https://denolite.onrender.com/api/auth/google-callback`). Set `WebApp__BaseUrl` above to your Web URL so the API redirects back to the site after login.
 
    **Connection string:** Key must be exactly `ConnectionStrings__DefaultConnection` (two underscores). Value: paste the **Internal Database URL** from Render with **no quotes** around it. If you get "Format of the initialization string does not conform to specification", use the **key=value** form instead of the URI: `Host=HOST;Port=5432;Database=DATABASE;Username=USER;Password=PASSWORD;SSL Mode=Require` (get HOST, DATABASE, USER, PASSWORD from your Render DB info).
+
+   **Using Resend for email (recommended on Render):** See [§4b. Configure Resend on the API](#4b-configure-resend-on-the-api-so-verification-emails-work-on-render) below.
 
 9. **Create Web Service.** Wait for the first deploy. Then copy the service URL (e.g. `https://denolite-api.onrender.com`).
 10. **Environment** → set `Jwt__Issuer` and `Jwt__Audience` to that URL if you used a placeholder. **Save changes** (triggers a redeploy).
@@ -82,6 +86,60 @@ If it says "already up to date" but the API still reports missing tables, reset 
 dotnet ef database update 0 --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection 'postgresql://YOUR_EXTERNAL_URL?sslmode=require'
 dotnet ef database update --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection 'postgresql://YOUR_EXTERNAL_URL?sslmode=require'
 ```
+
+---
+
+## 4b. Configure Resend on the API (so verification emails work on Render)
+
+Render often blocks outbound SMTP, so the app can use **Resend** instead: you add an API key and sender address on the API service; the app then sends email over HTTPS.
+
+### Step 1: Get a Resend API key
+
+1. Go to [resend.com](https://resend.com) and sign up (free tier is enough).
+2. In the dashboard, open **API Keys** and click **Create API Key**.
+3. Name it (e.g. `DenoLite Render`) and copy the key. It looks like `re_xxxxxxxxxxxx`. You won’t see it again, so save it somewhere safe.
+
+### Step 2: Open the API service env vars on Render
+
+1. In [Render Dashboard](https://dashboard.render.com), open your **API** Web Service (e.g. `denolite-api`).
+2. In the left sidebar click **Environment**.
+3. You’ll see the list of environment variables. You will **add** three and **remove** four (if they exist).
+
+### Step 3: Add these three variables
+
+Click **Add Environment Variable** and add each of these. Use the **key** exactly as written (including two underscores).
+
+| Key | Value | Notes |
+|-----|--------|--------|
+| `Resend__ApiKey` | Your Resend API key (e.g. `re_xxxxxxxxxxxx`) | Paste the key you copied in Step 1. |
+| `Email__FromEmail` | `onboarding@resend.dev` (for testing) | Resend’s test sender; no domain setup needed. For production, verify your own domain in Resend and use e.g. `noreply@yourdomain.com`. |
+| `Email__FromName` | `DenoLite` | Shown as the sender name in the inbox. |
+
+So you should have:
+
+- **Resend__ApiKey** = `re_xxxx...`
+- **Email__FromEmail** = `onboarding@resend.dev`
+- **Email__FromName** = `DenoLite`
+
+### Step 4: Remove these SMTP variables (if present)
+
+When the app uses Resend, it **ignores** SMTP settings. You can leave them and they won’t be used, but to avoid confusion and keep secrets off the dashboard, **remove** these from the API service if you added them earlier:
+
+| Remove this key | Why |
+|-----------------|-----|
+| `Email__Host` | Only used for SMTP. |
+| `Email__Port` | Only used for SMTP. |
+| `Email__UseSsl` | Only used for SMTP. |
+| `Email__Username` | Only used for SMTP. |
+| `Email__Password` | Only used for SMTP. |
+
+To remove: in the Environment list, use the trash/delete icon next to each of these keys. Do **not** remove `Email__FromEmail` or `Email__FromName` — those are still used by Resend.
+
+### Step 5: Save and redeploy
+
+Click **Save Changes**. Render will redeploy the API. After the deploy finishes, register or use “Resend code” on the Verify Email page; the email should be sent via Resend and arrive in the inbox (or spam).
+
+**Production:** To send from your own domain (e.g. `noreply@yourdomain.com`), in Resend add your domain, add the DNS records they show, then set `Email__FromEmail` to that address and save again.
 
 ---
 

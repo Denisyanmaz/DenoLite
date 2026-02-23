@@ -89,7 +89,19 @@ builder.Services.AddDbContext<DenoLiteDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is required.")));
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
-builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+var resendApiKey = builder.Configuration["Resend:ApiKey"];
+if (!string.IsNullOrWhiteSpace(resendApiKey))
+{
+    builder.Services.AddHttpClient<ResendEmailSender>(client =>
+    {
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + resendApiKey.Trim());
+    });
+    builder.Services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<ResendEmailSender>());
+}
+else
+{
+    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+}
 
 // 🔹 Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
