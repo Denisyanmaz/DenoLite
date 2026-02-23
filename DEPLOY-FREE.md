@@ -62,16 +62,26 @@ Make sure your repo is on GitHub (you already use it).
 
 ## 4. Run database migrations (from your PC)
 
-Use the **External** Database URL from step 2 (so your machine can reach the DB).
+Use the **External** Database URL from step 2 (so your machine can reach the DB). **Important:** pass it with `--connection` so the EF tools use Render's DB and not your local one from appsettings.Development.json. Use **single quotes** around the URI so PowerShell doesn't drop `=require` (e.g. `'...?sslmode=require'`). Or use the key=value form below.
 
 ```powershell
 cd c:\Denis_dotnet\StudyProjects\DenoLite
 
-$env:ConnectionStrings__DefaultConnection = "postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
-dotnet ef database update --project DenoLite.Infrastructure --startup-project DenoLite.Api
+dotnet ef database update --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection 'postgresql://USER:PASSWORD@HOST.frankfurt-postgres.render.com/DATABASE?sslmode=require'
 ```
 
-Replace the connection string with the **External Database URL** from Render (it already includes user, password, host, DB; add `?sslmode=require` if missing).
+Or with key=value (External host = full hostname with `.frankfurt-postgres.render.com`):
+
+```powershell
+dotnet ef database update --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection "Host=HOST.frankfurt-postgres.render.com;Port=5432;Database=DATABASE;Username=USER;Password=PASSWORD;SSL Mode=Require"
+```
+
+If it says "already up to date" but the API still reports missing tables, reset and re-apply (use single quotes for URI):
+
+```powershell
+dotnet ef database update 0 --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection 'postgresql://YOUR_EXTERNAL_URL?sslmode=require'
+dotnet ef database update --project DenoLite.Infrastructure --startup-project DenoLite.Api --connection 'postgresql://YOUR_EXTERNAL_URL?sslmode=require'
+```
 
 ---
 
