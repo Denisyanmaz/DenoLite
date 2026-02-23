@@ -207,7 +207,15 @@ namespace DenoLite.Infrastructure.Services
                     <p>This code expires in 15 minutes.</p>
                 </div>";
 
-            await _emailSender.SendAsync(user.Email, subject, html);
+            try
+            {
+                await _emailSender.SendAsync(user.Email, subject, html);
+            }
+            catch (Exception)
+            {
+                throw new ServiceUnavailableException(
+                    "We could not send the verification email. Please check your email settings or try again later.");
+            }
         }
 
         private string GenerateJwtToken(User user)

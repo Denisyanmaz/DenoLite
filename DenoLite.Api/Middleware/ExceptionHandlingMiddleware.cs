@@ -46,6 +46,10 @@ namespace DenoLite.Api.Middleware
             {
                 await WriteProblem(context, StatusCodes.Status409Conflict, ex.Message);
             }
+            catch (ServiceUnavailableException ex)
+            {
+                await WriteProblem(context, StatusCodes.Status503ServiceUnavailable, ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 await WriteProblem(context, StatusCodes.Status409Conflict, ex.Message);
