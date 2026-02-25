@@ -113,6 +113,20 @@ namespace DenoLite.Api.Controllers
             return Ok(new { message = "Email changed successfully." });
         }
 
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            await _authService.RequestPasswordResetAsync(dto.Email);
+            return Ok(new { message = "If an account exists with this email, a password reset code has been sent." });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            await _authService.ResetPasswordAsync(dto.Email, dto.Code, dto.NewPassword);
+            return Ok(new { message = "Password reset successfully. You can now login with your new password." });
+        }
+
         [HttpGet("google-login")]
         public IActionResult GoogleLogin()
         {

@@ -1,4 +1,5 @@
 using DenoLite.Application.DTOs.Auth;
+using DenoLite.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Configuration;
@@ -44,8 +45,7 @@ namespace DenoLite.Web.Pages
 
             if (!registerResp.IsSuccessStatusCode)
             {
-                var body = await registerResp.Content.ReadAsStringAsync();
-                Error = $"Register failed: {(int)registerResp.StatusCode} {registerResp.ReasonPhrase}\n{body}";
+                Error = await ApiErrorReader.ReadFriendlyMessageAsync(registerResp);
                 return Page();
             }
             // ✅ After register, go to verification page

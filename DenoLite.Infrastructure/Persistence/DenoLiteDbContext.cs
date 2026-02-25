@@ -26,6 +26,7 @@ namespace DenoLite.Infrastructure.Persistence
         public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
         public DbSet<EmailVerification> EmailVerifications => Set<EmailVerification>();
         public DbSet<EmailChangeRequest> EmailChangeRequests => Set<EmailChangeRequest>();
+        public DbSet<PasswordReset> PasswordResets => Set<PasswordReset>();
 
 
         public override int SaveChanges()
@@ -100,6 +101,34 @@ namespace DenoLite.Infrastructure.Persistence
                       .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(v => v.ExpiresAt);
+            });
+
+
+            // ----------------------------
+            // Password Resets
+            // ----------------------------
+            modelBuilder.Entity<PasswordReset>(entity =>
+            {
+                entity.Property(r => r.CodeHash)
+                      .IsRequired()
+                      .HasMaxLength(200);
+
+                entity.Property(r => r.ExpiresAt)
+                      .IsRequired();
+
+                entity.Property(r => r.Attempts)
+                      .HasDefaultValue(0);
+
+                entity.Property(r => r.IsUsed)
+                      .HasDefaultValue(false);
+
+                entity.HasIndex(r => r.UserId);
+                entity.HasIndex(r => r.ExpiresAt);
+
+                entity.HasOne<User>()
+                      .WithMany()
+                      .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
 

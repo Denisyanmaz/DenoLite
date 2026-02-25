@@ -5,7 +5,7 @@
 
 @if (!string.IsNullOrWhiteSpace(Model.Error))
 {
-    <div style="color:red; white-space:pre-wrap">@Model.Error</div>
+    <div class="alert alert-danger">@Model.Error</div>
 }
 
 <div class="auth-form mb-3">
@@ -44,7 +44,7 @@
         <button type="submit" class="btn btn-primary rounded-pill px-4 py-2">Register</button>
     </div>
     <p class="text-center mt-3 mb-0">
-        <a asp-page="/Login">Already have an account?</a>
+        <a asp-page="/Login">Already have an account?</a> • <a asp-page="/ForgotPassword">Forgot Password?</a>
     </p>
 </form>
 

@@ -34,8 +34,16 @@ namespace DenoLite.Infrastructure.Services
         {
             var email = dto.Email.Trim().ToLowerInvariant();
 
-            if (await _db.Users.AnyAsync(u => u.Email.ToLower() == email))
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (existingUser != null)
+            {
+                // Check if user registered with Google
+                if (!string.IsNullOrEmpty(existingUser.GoogleId))
+                {
+                    throw new ConflictException("This email is already registered with Google. Please sign in with Google or use the 'Forgot Password' option to set a password.");
+                }
                 throw new ConflictException("Email already exists");
+            }
 
             var user = new User
             {
@@ -477,6 +485,163 @@ namespace DenoLite.Infrastructure.Services
                 Role = user.Role,
                 Token = GenerateJwtToken(user)
             };
+        }
+
+        public async Task RequestPasswordResetAsync(string email)
+        {
+            email = email.Trim().ToLowerInvariant();
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            
+            // Security: Don't reveal if user exists or not
+            // But if user exists and uses Google-only, guide them
+            if (user == null)
+            {
+                // Silently succeed to prevent email enumeration
+                _logger.LogInformation("Password reset requested for non-existent email: {Email}", email);
+                return;
+            }
+
+            // Check if user is Google-only (no password set)
+            if (!string.IsNullOrEmpty(user.GoogleId) && string.IsNullOrEmpty(user.PasswordHash))
+            {
+                // This is a Google-only user trying to set a password
+                _logger.LogInformation("Password reset requested for Google-only user: {Email}", email);
+            }
+
+            // Remove any existing password reset requests
+            var existingResets = await _db.PasswordResets
+                .Where(r => r.UserId == user.Id)
+                .ToListAsync();
+
+            if (existingResets.Any())
+            {
+                _db.PasswordResets.RemoveRange(existingResets);
+                await _db.SaveChangesAsync();
+            }
+
+            // Generate 6-digit code
+            var code = GenerateSixDigitCode();
+            var codeHash = HashOtp(email, code);
+
+            var resetRequest = new PasswordReset
+            {
+                UserId = user.Id,
+                CodeHash = codeHash,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+                Attempts = 0,
+                IsUsed = false
+            };
+
+            _db.PasswordResets.Add(resetRequest);
+            await _db.SaveChangesAsync();
+
+            // Send email with reset code
+            var subject = "Password Reset Code - DenoLite";
+            var isGoogleUser = !string.IsNullOrEmpty(user.GoogleId) && string.IsNullOrEmpty(user.PasswordHash);
+            var html = $@"
+                <div style='font-family: Arial, sans-serif;'>
+                    <h2>Password Reset Request</h2>
+                    {(isGoogleUser ? "<p><strong>Note:</strong> You registered with Google. Setting a password will allow you to sign in with either Google or email/password.</p>" : "")}
+                    <p>Your password reset code is:</p>
+                    <div style='font-size: 28px; letter-spacing: 4px; font-weight: bold; color: #007bff;'>{code}</div>
+                    <p>This code expires in 15 minutes.</p>
+                    <p>If you didn't request this, please ignore this email.</p>
+                    <p>— The DenoLite Team</p>
+                </div>";
+
+            // Fire-and-forget
+            _ = SendPasswordResetEmailAsync(email, subject, html);
+        }
+
+        public async Task ResetPasswordAsync(string email, string code, string newPassword)
+        {
+            email = email.Trim().ToLowerInvariant();
+            code = code.Trim();
+
+            if (code.Length != 6 || !code.All(char.IsDigit))
+                throw new BadRequestException("Invalid code format.");
+
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+                throw new BadRequestException("Password must be at least 6 characters.");
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (user == null)
+                throw new NotFoundException("User not found.");
+
+            var resetRequest = await _db.PasswordResets
+                .Where(r => r.UserId == user.Id && !r.IsUsed)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (resetRequest == null)
+                throw new NotFoundException("No password reset request found. Please request a new code.");
+
+            if (resetRequest.IsUsed)
+                throw new ConflictException("This reset code was already used. Please request a new code.");
+
+            if (DateTime.UtcNow > resetRequest.ExpiresAt)
+            {
+                _db.PasswordResets.Remove(resetRequest);
+                await _db.SaveChangesAsync();
+                throw new BadRequestException("Reset code expired. Please request a new code.");
+            }
+
+            if (resetRequest.Attempts >= 5)
+                throw new TooManyRequestsException("Too many attempts. Please request a new code.");
+
+            var actualHash = HashOtp(email, code);
+
+            if (!FixedTimeEquals(resetRequest.CodeHash, actualHash))
+            {
+                resetRequest.Attempts += 1;
+                await _db.SaveChangesAsync();
+                throw new BadRequestException("Invalid reset code.");
+            }
+
+            // Success - update password
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            // Mark reset as used and remove
+            _db.PasswordResets.Remove(resetRequest);
+            await _db.SaveChangesAsync();
+
+            // Send confirmation email
+            _ = SendPasswordResetSuccessEmailAsync(user.Email);
+        }
+
+        private async Task SendPasswordResetEmailAsync(string email, string subject, string html)
+        {
+            try
+            {
+                await _emailSender.SendAsync(email, subject, html);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email to {Email}", email);
+            }
+        }
+
+        private async Task SendPasswordResetSuccessEmailAsync(string email)
+        {
+            try
+            {
+                var subject = "Password Reset Successful - DenoLite";
+                var html = @"
+                    <div style='font-family: Arial, sans-serif;'>
+                        <h2>Password Reset Successful</h2>
+                        <p>Your DenoLite account password has been reset successfully.</p>
+                        <p>You can now sign in with your new password.</p>
+                        <p>If you didn't make this change, please contact support immediately.</p>
+                        <p>— The DenoLite Team</p>
+                    </div>";
+                await _emailSender.SendAsync(email, subject, html);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset success email to {Email}", email);
+            }
         }
 
         private string GenerateSixDigitCode()
