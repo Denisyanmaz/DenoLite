@@ -34,6 +34,10 @@ namespace DenoLite.Web.Pages
 
             if (verified)
                 Success = "Email verified successfully. You can now log in.";
+
+            // Check for TempData success messages (e.g., from password reset)
+            if (TempData.ContainsKey("SuccessMessage"))
+                Success = TempData["SuccessMessage"]?.ToString();
         }
 
         public async Task<IActionResult> OnPostAsync()
