@@ -29,7 +29,7 @@ namespace DenoLite.Infrastructure.Persistence
         public DbSet<PasswordReset> PasswordResets => Set<PasswordReset>();
         public DbSet<TaskTag> TaskTags => Set<TaskTag>();
         public DbSet<BoardColumn> BoardColumns => Set<BoardColumn>();
-
+public DbSet<ProjectInvitation> ProjectInvitations => Set<ProjectInvitation>();
 
         public override int SaveChanges()
         {
@@ -343,6 +343,40 @@ namespace DenoLite.Infrastructure.Persistence
                       .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(tt => tt.TaskId);
+            });
+            // ----------------------------
+// Project Invitations
+// ----------------------------
+            modelBuilder.Entity<ProjectInvitation>(entity =>
+            {
+            entity.Property(i => i.Email)
+                  .IsRequired()
+                  .HasMaxLength(50);
+
+            entity.Property(i => i.Token)
+                  .IsRequired()
+                  .HasMaxLength(200);
+
+            entity.Property(i => i.Status)
+                  .IsRequired()
+                  .HasMaxLength(20);
+
+            entity.Property(i => i.ExpiresAt)
+                  .IsRequired();
+
+            entity.HasIndex(i => i.Token)
+                  .IsUnique();
+
+            entity.HasIndex(i => new { i.ProjectId, i.Email, i.Status });
+
+            entity.ToTable(t =>
+                  t.HasCheckConstraint("CK_ProjectInvitations_Status",
+                        @"""Status"" IN ('Pending','Accepted','Expired','Cancelled')"));
+
+            entity.HasOne(i => i.Project)
+                  .WithMany()
+                  .HasForeignKey(i => i.ProjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
             });
         }
 

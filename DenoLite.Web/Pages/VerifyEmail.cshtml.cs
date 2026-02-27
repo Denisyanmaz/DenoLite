@@ -19,6 +19,8 @@ namespace DenoLite.Web.Pages
 
         [BindProperty]
         public VerifyEmailInput Input { get; set; } = new();
+        [BindProperty(SupportsGet = true, Name = "inviteToken")]
+        public string? InviteToken { get; set; }
 
         public string? Error { get; set; }
         public string? Success { get; set; }
@@ -42,10 +44,11 @@ namespace DenoLite.Web.Pages
             _logger.LogInformation("Verify email: calling API POST /api/auth/verify-email for {Email}", Input.Email);
 
             // API expects: { email, code }
-            var resp = await client.PostAsJsonAsync("/api/auth/verify-email", new
+            var resp = await client.PostAsJsonAsync("/api/auth/verify-email-with-invite", new
             {
                 email = Input.Email,
-                code = Input.Code
+                code = Input.Code,
+                inviteToken = InviteToken
             });
 
             _logger.LogInformation("Verify email: API responded {StatusCode}", resp.StatusCode);

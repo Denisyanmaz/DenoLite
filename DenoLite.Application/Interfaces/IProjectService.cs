@@ -16,6 +16,7 @@ namespace DenoLite.Application.Interfaces
         Task<PagedResult<ProjectDto>> GetMyProjectsPagedAsync(Guid userId, int page, int pageSize);
         Task<List<ProjectMemberDto>> GetMembersAsync(Guid projectId, Guid currentUserId);
         Task RemoveMemberAsync(Guid projectId, Guid memberUserId, Guid currentUserId);
-
+        Task InviteMemberAsync(Guid projectId, InviteProjectMemberDto dto, Guid currentUserId);
+        Task AddMemberOrInviteAsync(Guid projectId, string email, string role, Guid currentUserId);
     }
 }

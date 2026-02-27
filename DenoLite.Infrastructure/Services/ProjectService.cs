@@ -7,6 +7,7 @@ using DenoLite.Domain.Entities;
 using DenoLite.Domain.Enums;
 using DenoLite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace DenoLite.Infrastructure.Services
 {
@@ -15,12 +16,18 @@ namespace DenoLite.Infrastructure.Services
         private readonly DenoLiteDbContext _db;
         private readonly IActivityService _activity;
         private readonly IEmailSender _emailSender;
+        private readonly IConfiguration _configuration;
 
-        public ProjectService(DenoLiteDbContext db, IActivityService activity, IEmailSender emailSender)
+        public ProjectService(
+            DenoLiteDbContext db,
+            IActivityService activity,
+            IEmailSender emailSender,
+            IConfiguration configuration)
         {
             _db = db;
             _activity = activity;
             _emailSender = emailSender;
+            _configuration = configuration;
         }
 
         public async Task<bool> IsOwnerAsync(Guid projectId, Guid userId)
@@ -100,6 +107,74 @@ namespace DenoLite.Infrastructure.Services
                     OwnerId = pm.Project.OwnerId
                 })
                 .ToListAsync();
+        }
+        public async Task InviteMemberAsync(Guid projectId, InviteProjectMemberDto dto, Guid currentUserId)
+        {
+            var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null)
+                throw new KeyNotFoundException("Project not found");
+
+            // current user must be owner
+            var currentMember = await _db.ProjectMembers
+                .FirstOrDefaultAsync(pm => pm.ProjectId == projectId && pm.UserId == currentUserId);
+            if (currentMember == null || currentMember.Role != "Owner")
+                throw new ForbiddenException("Only project owners can invite members.");
+
+            var email = dto.Email.Trim().ToLowerInvariant();
+
+            // If there is already an active member with this email, just fail fast (owner should use AddMember by user id)
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (existingUser != null)
+            {
+                var isAlreadyMember = await _db.ProjectMembers
+                    .AnyAsync(pm => pm.ProjectId == projectId && pm.UserId == existingUser.Id);
+                if (isAlreadyMember)
+                    throw new ConflictException("This email is already a member of the project.");
+            }
+
+            var now = DateTime.UtcNow;
+            var expiresAt = now.AddDays(3);
+
+            // invalidate any previous pending invites for same project/email
+            var oldPending = await _db.ProjectInvitations
+                .Where(i => i.ProjectId == projectId
+                            && i.Email == email
+                            && i.Status == "Pending")
+                .ToListAsync();
+            foreach (var inv in oldPending)
+                inv.Status = "Cancelled";
+
+            var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+                .Replace("+", "")
+                .Replace("/", "")
+                .Replace("=", "");
+
+            var invitation = new ProjectInvitation
+            {
+                ProjectId = projectId,
+                InvitedByUserId = currentUserId,
+                Email = email,
+                Token = token,
+                Status = "Pending",
+                ExpiresAt = expiresAt
+            };
+
+            _db.ProjectInvitations.Add(invitation);
+            await _db.SaveChangesAsync();
+
+            var webAppBaseUrl = _configuration["WebApp:BaseUrl"] ?? "https://localhost:7002"; // adjust port if your Web app uses another
+            var inviteUrl = $"{webAppBaseUrl}/Register?email={Uri.EscapeDataString(email)}&inviteToken={Uri.EscapeDataString(token)}";
+            
+            var subject = $"You’ve been invited to project \"{project.Name}\"";
+            var body = $"""
+                <p>Hi,</p>
+                <p>{System.Net.WebUtility.HtmlEncode(project.Name)} owner is inviting you to collaborate on <strong>DenoLite</strong>.</p>
+                <p>To join, please register (or sign in) using this email within 3 days:</p>
+                <p><a href="{inviteUrl}">Accept invitation</a></p>
+                <p>If you don’t register within 3 days, the invitation will automatically expire.</p>
+                """;
+
+            await _emailSender.SendAsync(email, subject, body);
         }
 
         public async Task<ProjectMemberDto> AddMemberAsync(Guid projectId, AddProjectMemberDto dto, Guid currentUserId)
@@ -400,6 +475,34 @@ namespace DenoLite.Infrastructure.Services
                 .ToListAsync();
 
             return new PagedResult<ProjectDto>(items, page, pageSize, total);
+        }
+        public async Task AddMemberOrInviteAsync(Guid projectId, string email, string role, Guid currentUserId)
+        {
+            email = (email ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(email))
+                throw new BadRequestException("Email is required.");
+
+            // Try to find existing user
+            var user = await _db.Users
+                .Where(u => u.Email.ToLower() == email)
+                .FirstOrDefaultAsync();
+
+            if (user != null)
+            {
+                // Existing user → reuse existing AddMemberAsync
+                await AddMemberAsync(projectId, new AddProjectMemberDto
+                {
+                    UserId = user.Id,
+                    Role = role
+                }, currentUserId);
+                return;
+            }
+
+            // New email → send invitation
+            await InviteMemberAsync(projectId, new InviteProjectMemberDto
+            {
+                Email = email
+            }, currentUserId);
         }
     }
 }
