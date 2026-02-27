@@ -61,9 +61,16 @@ namespace DenoLite.Api.Controllers
             var memberDto = await _projectService.AddMemberAsync(projectId, dto, currentUserId);
 
             // returns the member that was added
-            return CreatedAtAction(nameof(GetMembers), new { projectId = projectId }, memberDto);
+            return Ok(memberDto);
         }
-
+        
+        [HttpPost("{projectId:guid}/invites")]
+        public async Task<IActionResult> InviteMember(Guid projectId, [FromBody] InviteProjectMemberDto dto)
+        {
+            var userId = GetCurrentUserId();
+            await _projectService.InviteMemberAsync(projectId, dto, userId);
+            return NoContent();
+        }
         // GET /api/projects/{projectId}/members
         [HttpGet("{projectId:guid}/members")]
         public async Task<IActionResult> GetMembers(Guid projectId)
@@ -73,6 +80,14 @@ namespace DenoLite.Api.Controllers
             var members = await _projectService.GetMembersAsync(projectId, currentUserId);
 
             return Ok(members);
+        }
+
+        [HttpPost("{projectId:guid}/members-or-invite")]
+        public async Task<IActionResult> AddMemberOrInvite(Guid projectId, [FromBody] AddMemberByEmailDto dto)
+        {
+            var currentUserId = GetCurrentUserId();
+            await _projectService.AddMemberOrInviteAsync(projectId, dto.Email, dto.Role, currentUserId);
+            return NoContent();
         }
 
         // DELETE /api/projects/{projectId}/members/{memberUserId}

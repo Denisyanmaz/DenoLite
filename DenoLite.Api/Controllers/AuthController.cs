@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
+using DenoLite.Domain.Entities;
 
 namespace DenoLite.Api.Controllers
 {
@@ -29,6 +30,67 @@ namespace DenoLite.Api.Controllers
             _logger = logger;
         }
 
+        [HttpPost("verify-email-with-invite")]
+        public async Task<IActionResult> VerifyEmailWithInvite([FromBody] VerifyEmailWithInviteDto dto)
+        {
+            await _authService.VerifyEmailAsync(dto.Email, dto.Code);
+
+            if (string.IsNullOrWhiteSpace(dto.InviteToken))
+                return Ok(new { message = "Email verified." });
+
+            var now = DateTime.UtcNow;
+
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var user = await _db.Users
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == dto.Email.ToLower());
+                if (user == null)
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest("User not found after verification.");
+                }
+
+                var invite = await _db.ProjectInvitations
+                    .FirstOrDefaultAsync(i =>
+                        i.Token == dto.InviteToken &&
+                        i.Email.ToLower() == dto.Email.ToLower() &&
+                        i.Status == "Pending" &&
+                        i.ExpiresAt > now);
+
+                if (invite == null)
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest("Invitation is invalid or expired.");
+                }
+
+                var alreadyMember = await _db.ProjectMembers
+                    .AnyAsync(pm => pm.ProjectId == invite.ProjectId && pm.UserId == user.Id);
+
+                if (!alreadyMember)
+                {
+                    _db.ProjectMembers.Add(new ProjectMember
+                    {
+                        ProjectId = invite.ProjectId,
+                        UserId = user.Id,
+                        Role = "Member"
+                    });
+                }
+
+                invite.Status = "Accepted";
+                invite.AcceptedAt = now;
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new { message = "Email verified and invitation accepted." });
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterUserDto dto)
         {

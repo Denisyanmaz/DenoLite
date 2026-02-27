@@ -96,6 +96,16 @@ namespace DenoLite.Web.Pages.Projects
         [BindProperty]
         public AddMemberInputModel AddMemberInput { get; set; } = new();
 
+        public class InviteMemberInputModel
+        {
+            [Required]
+            [EmailAddress]
+            public string Email { get; set; } = "";
+        }
+
+        [BindProperty]
+        public InviteMemberInputModel InviteMemberInput { get; set; } = new();
+
 
         // ✅ For UI permissions (Leave/Remove rendering)
         public Guid CurrentUserId { get; private set; }
@@ -204,59 +214,30 @@ namespace DenoLite.Web.Pages.Projects
         public async Task<IActionResult> OnPostAddMemberAsync()
         {
             Tab = "members";
-
-            // ✅ Clear existing validation results (prevents other form fields like "Title" from blocking)
             ModelState.Clear();
 
-            // ✅ Validate ONLY AddMemberInput
             if (!TryValidateModel(AddMemberInput, nameof(AddMemberInput)))
             {
-                var allErrors = ModelState
-                    .Where(kvp => kvp.Value?.Errors?.Count > 0)
-                    .SelectMany(kvp => kvp.Value!.Errors.Select(e => $"{kvp.Key}: {e.ErrorMessage}"))
-                    .ToList();
-
-                MembersError = "ModelState invalid:\n" + string.Join("\n", allErrors);
-
+                MembersError = "Invalid email.";
                 await LoadPageAsync();
                 return Page();
             }
 
             if (ProjectId == Guid.Empty)
             {
-                MembersError = "ProjectId is empty. The form post did not include the {id} route value.";
+                MembersError = "ProjectId is empty.";
                 await LoadPageAsync();
                 return Page();
             }
 
             var client = _httpClientFactory.CreateClient("DenoLiteApi");
-            var email = AddMemberInput.Email.Trim();
-
-            var resolveResp = await client.GetAsync($"/api/users/resolve?q={Uri.EscapeDataString(email)}");
-
-            if (!resolveResp.IsSuccessStatusCode)
+            var dto = new
             {
-                var body = await resolveResp.Content.ReadAsStringAsync();
-                MembersError = $"User resolve failed: {(int)resolveResp.StatusCode} {resolveResp.ReasonPhrase}\n{body}";
-                await LoadPageAsync();
-                return Page();
-            }
-
-            var resolved = await resolveResp.Content.ReadFromJsonAsync<ResolveUserResponse>();
-            if (resolved == null || resolved.UserId == Guid.Empty)
-            {
-                MembersError = "User resolve failed: invalid response.";
-                await LoadPageAsync();
-                return Page();
-            }
-
-            var dto = new ProjectMemberDto
-            {
-                UserId = resolved.UserId,
-                Role = AddMemberInput.Role
+                email = AddMemberInput.Email.Trim(),
+                role = AddMemberInput.Role
             };
 
-            var resp = await client.PostAsJsonAsync($"/api/projects/{ProjectId}/members", dto);
+            var resp = await client.PostAsJsonAsync($"/api/projects/{ProjectId}/members-or-invite", dto);
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
                 return RedirectToPage("/Login");
@@ -264,14 +245,50 @@ namespace DenoLite.Web.Pages.Projects
             if (!resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadAsStringAsync();
-                MembersError = $"Add member failed: {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}";
+                MembersError = $"Add/invite failed: {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}";
                 await LoadPageAsync();
                 return Page();
             }
 
-            // ✅ Reset the input so it doesn't stay in the textbox
             AddMemberInput = new AddMemberInputModel();
+            return Redirect($"/Projects/Details/{ProjectId}?tab=members");
+        }
+        // POST: Invite Member (email-based invite for non-users)
+        public async Task<IActionResult> OnPostInviteMemberAsync()
+        {
+            Tab = "members";
 
+            ModelState.Clear();
+            if (!TryValidateModel(InviteMemberInput, nameof(InviteMemberInput)))
+            {
+                MembersError = "Invalid email for invitation.";
+                await LoadPageAsync();
+                return Page();
+            }
+
+            if (ProjectId == Guid.Empty)
+            {
+                MembersError = "ProjectId is empty.";
+                await LoadPageAsync();
+                return Page();
+            }
+
+            var client = _httpClientFactory.CreateClient("DenoLiteApi");
+            var dto = new InviteProjectMemberDto { Email = InviteMemberInput.Email.Trim() };
+            var resp = await client.PostAsJsonAsync($"/api/projects/{ProjectId}/invites", dto);
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                return RedirectToPage("/Login");
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                MembersError = $"Invite failed: {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}";
+                await LoadPageAsync();
+                return Page();
+            }
+
+            InviteMemberInput = new InviteMemberInputModel();
             return Redirect($"/Projects/Details/{ProjectId}?tab=members");
         }
 

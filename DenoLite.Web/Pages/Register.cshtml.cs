@@ -21,11 +21,17 @@ namespace DenoLite.Web.Pages
 
         [BindProperty]
         public RegisterInput Input { get; set; } = new();
+        [BindProperty(SupportsGet = true, Name = "inviteToken")]
+        public string? InviteToken { get; set; }
 
         public string? Error { get; set; }
         public string ApiBaseUrl => _configuration["Api:BaseUrl"] ?? "https://localhost:7144";
 
-        public void OnGet() { }
+        public void OnGet(string? email = null)
+        {
+            if (!string.IsNullOrWhiteSpace(email))
+                Input.Email = email;
+        }
 
         public async Task<IActionResult> OnPostAsync()
         {
@@ -49,8 +55,7 @@ namespace DenoLite.Web.Pages
                 return Page();
             }
             // ✅ After register, go to verification page
-            return RedirectToPage("/VerifyEmail", new { email = Input.Email });
-
+            return RedirectToPage("/VerifyEmail", new { email = Input.Email, inviteToken = InviteToken });
         }
 
         public class RegisterInput
