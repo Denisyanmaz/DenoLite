@@ -382,7 +382,10 @@
                                         by <code>@(string.IsNullOrEmpty(c.AuthorEmail) ? c.AuthorId.ToString() : c.AuthorEmail)</code>
                                     </div>
                                     <div class="text-muted small">
-                                        @c.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                        <time class="deno-datetime"
+                                              datetime="@c.CreatedAt.ToUniversalTime().ToString("o")">
+                                            @c.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                        </time>
                                     </div>
                                 </div>
                                 <div class="mt-2">@Html.Raw(c.Body)</div>
@@ -414,7 +417,12 @@
                                     <span class="badge bg-secondary">@a.ActionType</span>
                                     <span class="text-muted small">by <code>@(Model.AssigneeEmailById.TryGetValue(a.ActorId, out var actorEmail) && !string.IsNullOrWhiteSpace(actorEmail) ? actorEmail : a.ActorId.ToString())</code></span>
                                 </div>
-                                <div class="text-muted small">@a.CreatedAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                <div class="text-muted small">
+                                    <time class="deno-datetime"
+                                          datetime="@a.CreatedAt.ToUniversalTime().ToString("o")">
+                                        @a.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                    </time>
+                                </div>
                             </div>
                             <div class="mt-2">@Model.CleanActivityMessage(a.Message, a.ActionType)</div>
                         </div>
@@ -701,6 +709,34 @@
                     });
                 } catch {
                     // If Quill fails for comments, fall back to plain textarea
+                }
+            })();
+
+            // Format all deno-datetime elements using the browser's local time zone
+            // and Turkish date style (dd.MM.yyyy HH:mm).
+            (function formatDenoLiteDates() {
+                try {
+                    var nodes = document.querySelectorAll(".deno-datetime");
+                    if (!nodes || nodes.length === 0) return;
+
+                    nodes.forEach(function (el) {
+                        var iso = el.getAttribute("datetime") || (el.textContent || "").trim();
+                        if (!iso) return;
+                        var d = new Date(iso);
+                        if (isNaN(d.getTime())) return;
+
+                        var formatted = d.toLocaleString("tr-TR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+
+                        el.textContent = formatted;
+                    });
+                } catch (e) {
+                    // If formatting fails, fall back to server-rendered text.
                 }
             })();
         })();
